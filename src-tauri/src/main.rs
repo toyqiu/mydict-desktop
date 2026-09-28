@@ -10,7 +10,7 @@ mod mydict;
 
 use std::path::PathBuf;
 
-use tauri::{Manager, WebviewWindow};
+use tauri::{Emitter, Manager, WebviewWindow};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 use mydict::{AppState, AuthStatus, Hit, Settings};
@@ -52,6 +52,7 @@ fn main() {
                     let _ = window.show();
                     let _ = window.set_focus();
                     app.state::<AppState>().set_window_visible(true);
+                    let _ = app.emit("mydict:shown", ShownPayload { focused: true });
                 }
             }
             Ok(())
@@ -65,6 +66,9 @@ fn main() {
             search,
             entry_html,
             hide_window,
+            selection_text,
+            note,
+            focus_probe,
             hotkey_error,
             open_external,
         ])
@@ -196,7 +200,12 @@ fn key_code(token: &str) -> Result<Code, String> {
     Ok(code)
 }
 
-/// 热键：可见就收起，不可见就呼出并聚焦。
+/// 热键：可见就收起，不可见就呼出。
+///
+/// 呼出分两种模式：
+/// - **划词模式**（`selection_first` 开着且系统里真有选中文字）：查那段文字，窗口**不抢焦点**，
+///   不打断用户在原应用里的选区；
+/// - **普通模式**：聚焦窗口并把光标放到输入框（由前端在 `mydict:shown` 里处理）。
 ///
 /// 可见状态用 AppState 自己记账，**不能用 `is_visible()`**（X11/GTK 下它对无边框窗口恒为
 /// false，实测踩到：窗口明明显示着，第二次按热键却仍走呼出分支、收不起来）。
@@ -206,16 +215,127 @@ fn toggle_window(app: &tauri::AppHandle) {
     };
     let state = app.state::<AppState>();
     let visible = state.is_window_visible();
-    eprintln!("[hotkey] 触发：记账可见={visible} → {}", if visible { "收起" } else { "呼出" });
     if visible {
+        eprintln!("[hotkey] 可见 → 收起");
         let _ = window.hide();
         state.set_window_visible(false);
+        let _ = app.emit("mydict:hidden", ());
         return;
     }
+
+    let settings = state.settings();
+    let selected = if settings.selection_first {
+        read_selection()
+    } else {
+        String::new()
+    };
+    // 划词模式下要把焦点还给用户原来的窗口：X11 的 WM 在 map 新窗口时会自动聚焦，
+    // 光是不调 set_focus() 不够——得记住原活动窗口、呼出后再还回去。
+    let previous_active = if selected.is_empty() { None } else { active_window_id() };
     place_near_cursor(&window);
     let _ = window.show();
-    let _ = window.set_focus();
     state.set_window_visible(true);
+    eprintln!(
+        "[hotkey] 呼出（{}）",
+        if selected.is_empty() { "普通模式" } else { "划词模式" }
+    );
+
+    if selected.is_empty() {
+        // 普通呼出：抢焦点（前端收到 focused=true 后会把光标放进输入框）。
+        // XFCE 的「防焦点窃取」可能把刚拿到的焦点又还给上一个窗口，所以补一次——
+        // 不然前端会看到「刚聚焦就失焦」，把它当成用户离开而立刻收起。
+        let _ = window.set_focus();
+        let focus_window = window.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let _ = focus_window.set_focus();
+        });
+        let _ = app.emit("mydict:shown", ShownPayload { focused: true });
+    } else {
+        // 划词：只展示不抢焦点。前端收到 focused=false 就不会武装「失焦收起」，
+        // 也不会去动输入框焦点。
+        if let Some(id) = previous_active.clone() {
+            hand_focus_back(&id);
+            // WM 的 map/聚焦是异步的：立刻还一次之后再补一次，确保最终焦点落在用户原来的窗口上
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(160));
+                hand_focus_back(&id);
+            });
+        }
+        let _ = app.emit("mydict:word", selected);
+        let _ = app.emit("mydict:shown", ShownPayload { focused: false });
+    }
+}
+
+/// 当前活动窗口的 X id（划词模式呼出前记下来，之后把焦点还回去）
+#[cfg(all(unix, not(target_os = "macos")))]
+fn active_window_id() -> Option<String> {
+    let output = std::process::Command::new("xdotool")
+        .arg("getactivewindow")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if id.is_empty() || id == "0" {
+        None
+    } else {
+        Some(id)
+    }
+}
+
+#[cfg(not(all(unix, not(target_os = "macos"))))]
+fn active_window_id() -> Option<String> {
+    None
+}
+
+/// 把键盘焦点还给指定窗口（`windowfocus` 只改焦点、不抬升窗口，我们的悬浮层仍在最上）
+#[cfg(all(unix, not(target_os = "macos")))]
+fn hand_focus_back(window_id: &str) {
+    let _ = std::process::Command::new("xdotool")
+        .args(["windowfocus", "--sync", window_id])
+        .output();
+}
+
+#[cfg(not(all(unix, not(target_os = "macos"))))]
+fn hand_focus_back(_window_id: &str) {}
+
+/// 给前端的「窗口已显示」事件载荷
+#[derive(Clone, serde::Serialize)]
+struct ShownPayload {
+    focused: bool,
+}
+
+/// 读当前选中文字（划词用）。
+///
+/// Linux/X11：先读 PRIMARY 选区（拖选即写入，不碰剪贴板），没有再看 CLIPBOARD。
+/// 走 `xclip` 子进程而不是 X11 crate：少一个依赖、行为可预期（`xclip` 没选区时立刻退出）。
+///
+/// Windows：UIA 取选区（Electron/自绘文本取不到）或模拟 Ctrl+C + 剪贴板还原，M3 再做，
+/// 这里先返回空串——即退化成「普通呼出」，不会出错。
+#[cfg(all(unix, not(target_os = "macos")))]
+fn read_selection() -> String {
+    for selection in ["primary", "clipboard"] {
+        if let Ok(output) = std::process::Command::new("xclip")
+            .args(["-o", "-selection", selection])
+            .output()
+        {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !text.is_empty() {
+                    return text;
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+#[cfg(not(all(unix, not(target_os = "macos"))))]
+fn read_selection() -> String {
+    // TODO(M3)：Windows 走 UIA；macOS 走 AX API
+    String::new()
 }
 
 /// 悬浮窗落在鼠标所在那块屏的中上部；拿不到鼠标位置就退回居中
@@ -298,13 +418,51 @@ async fn entry_html(
     state.entry_html(dictionary_id, &word, &entry_ids).await
 }
 
+/// 焦点探针：返回「当前活动窗口」的 `id|名字`，供前端判断失焦是真离开还是幽灵事件。
+///
+/// 实测出现过无任何交互、呼出 18 秒后自己失焦的情况（X 层面把焦点交给了空窗口），
+/// 于是失焦时先问一句：焦点落在哪儿？落在空 / 自己身上就不算用户离开。
+#[tauri::command]
+fn focus_probe() -> String {
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let Some(id) = active_window_id() else {
+            return "0|".to_string();
+        };
+        let name = std::process::Command::new("xdotool")
+            .args(["getwindowname", &id])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+        return format!("{id}|{name}");
+    }
+    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    {
+        "0|".to_string()
+    }
+}
+
+/// 前端的诊断写入 stderr（GUI 里没有控制台，这个能把「谁触发了收起」这种线索留下来）
+#[tauri::command]
+fn note(tag: String) {
+    eprintln!("[front] {tag}");
+}
+
+/// 读当前选中文字（前端在调试或将来做「划词快捷查」时可能要用）
+#[tauri::command]
+fn selection_text() -> String {
+    read_selection()
+}
+
 #[tauri::command]
 fn hide_window(app: tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
-        eprintln!("[hide] 前端请求收起（Esc/失焦）");
+        eprintln!("[hide] 前端请求收起");
         // 同步记账：否则下一次热键会以为「已经可见」而只做 hide（表现为按了没反应）
         app.state::<AppState>().set_window_visible(false);
+        let _ = app.emit("mydict:hidden", ());
     }
 }
 

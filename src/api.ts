@@ -39,5 +39,7 @@ export const api = {
   entryHtml: (dictionaryId: number, word: string, entryIds: number[]) =>
     invoke<string>('entry_html', { dictionaryId, word, entryIds }),
   hideWindow: () => invoke<void>('hide_window'),
+  note: (tag: string) => invoke<void>('note', { tag }),
+  focusProbe: () => invoke<string>('focus_probe'),
   openExternal: (url: string) => invoke<void>('open_external', { url }),
 }

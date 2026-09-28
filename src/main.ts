@@ -1,3 +1,6 @@
+import { listen } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+
 import { api, type Hit, type Settings } from './api'
 import { createEntryFrame, type EntryFrame } from './entry-frame'
 import './theme.css'
@@ -109,6 +112,7 @@ let hits: Hit[] = []
 let activeIndex = -1
 let queryWord = ''
 let entryFrame: EntryFrame | null = null
+const win = getCurrentWindow()
 
 function applyTheme(theme: string) {
   document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark'
@@ -342,8 +346,12 @@ element('btn-theme').addEventListener('click', async () => {
 // 键盘：Esc 先关弹窗、否则收起窗口；↑/↓ 选命中
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
-    if (!modal.hidden) closeSettings()
-    else void api.hideWindow()
+    if (!modal.hidden) {
+      closeSettings()
+    } else {
+      void api.note('Esc 收起（键盘事件到了）')
+      void api.hideWindow()
+    }
     return
   }
   if (!modal.hidden) return
@@ -356,10 +364,75 @@ document.addEventListener('keydown', (event) => {
 })
 
 /*
- * 失焦收起留到 M2 一起做：X11 下 show() 会先给一次失焦、那次 hide() 还会落在映射过渡里
- * 丢掉，直接按失焦收起会出现「刚呼出就被收掉、且记账与实际不一致」的连锁问题。
- * 正确做法是 Rust 侧在 show() 之后发一个「已显示」事件复位守卫，见计划里的 M2-a。
+ * 失焦收起（M2）：Rust 侧在热键呼出后会发 `mydict:shown` / `mydict:word`。
+ *
+ * 「武装」只能挂在**真正的焦点事件**（onFocusChanged(true)）上，不能挂在 mydict:shown 上：
+ * Rust 的 show() 返回时窗口还没被 WM 聚焦，此刻就武装的话，X11 随后那次过渡失焦会把刚呼出的
+ * 窗口收掉——正是 M1 踩过的坑。划词模式窗口从不拿焦点，也就永远不会武装（它靠 Esc/热键收起）。
  */
+let canHideOnBlur = false
+/**
+ * 划词模式下，呼出后会立刻把焦点归还给用户原来的窗口（见 Rust 的 hand_focus_back）——
+ * 那次失焦不是「用户离开了」，不能被当成收起信号。给它一段时间窗。
+ */
+let suppressBlurUntil = 0
+/** 上次武装的时刻：用来忽略「刚聚焦就失焦」的抖动 */
+let armedAt = 0
+
+void listen<{ focused: boolean }>('mydict:shown', (event) => {
+  if (event.payload.focused) {
+    // 普通呼出：把光标放进输入框，等焦点事件到了再武装
+    input.focus()
+    input.select()
+    suppressBlurUntil = 0
+  } else {
+    // 划词：不动输入框；焦点归还带来的失焦在 1.5s 内不算数
+    suppressBlurUntil = Date.now() + 1500
+  }
+})
+
+void listen<string>('mydict:word', (event) => {
+  // 划词：直接查选中的文字，不动输入框焦点（窗口也没拿焦点）
+  if (typeof event.payload === 'string' && event.payload.trim()) {
+    void runSearch(event.payload)
+  }
+})
+
+void listen('mydict:hidden', () => {
+  canHideOnBlur = false
+  suppressBlurUntil = 0
+})
+
+void win.onFocusChanged(({ payload: focused }) => {
+  if (focused) {
+    if (settings.hide_on_blur) {
+      canHideOnBlur = true
+      armedAt = Date.now()
+    }
+    return
+  }
+  if (!canHideOnBlur) return
+  // 刚拿到焦点就失焦，是 show/focus 的抖动（XFCE 防焦点窃取会把焦点还回去），
+  // 不是「用户离开了」——实测踩到过：每次呼出都被自己立刻收起。
+  if (Date.now() - armedAt < 700) return
+  if (Date.now() < suppressBlurUntil) return
+  void handleBlur()
+})
+
+/** 失焦：先确认焦点真的落到别的窗口了，再收起 */
+async function handleBlur() {
+  const probe = await api.focusProbe()
+  const [id, name = ''] = probe.split('|')
+  const ours = /^(my)?dict|MyDict/i.test(name)
+  if (!id || id === '0' || ours) {
+    // 幽灵失焦（焦点交给了空窗口/自己的辅助窗口）：不算用户离开
+    void api.note(`忽略幽灵失焦：${probe}`)
+    return
+  }
+  canHideOnBlur = false
+  void api.note(`失焦收起：焦点去了 ${probe}`)
+  void api.hideWindow()
+}
 
 entryFrame = createEntryFrame({
   baseUrl: () => settings.server_url,
