@@ -1,0 +1,76 @@
+/**
+ * aurora 主题令牌
+ *
+ * 数值取自 /vol1/1000/docker/baota/cal 的皮肤定义：
+ *   - 亮色：style.css 里的 `.skin-aurora`
+ *   - 暗色：dark_mode.css 里的 `body.dark-mode.skin-aurora`
+ * 结构与 cal 一致：**明暗两套变量正交**，组件只消费语义变量，不写死颜色。
+ */
+
+:root {
+  /* 极光强调色（两套主题共用） */
+  --accent: #6a8cff; /* 极光蓝 */
+  --accent-2: #a86bff; /* 极光紫 */
+  --accent-grad: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  --accent-soft: rgba(106, 140, 255, 0.14);
+  --accent-ring: rgba(106, 140, 255, 0.42);
+  --folio-glow: 0 10px 24px rgba(106, 140, 255, 0.2);
+  --folio-glow-strong: 0 10px 24px rgba(168, 107, 255, 0.4);
+
+  /* 卡片与动效（cal 的语汇：20px 圆角、6px 间距、220ms 缓动） */
+  --radius-card: 20px;
+  --radius-soft: 12px;
+  --radius-pill: 999px;
+  --gap-card: 6px;
+  --dur: 0.22s;
+  --ease: cubic-bezier(0.2, 0.8, 0.25, 1);
+
+  --danger: #ff6b6b;
+  --warn: #e0a63c;
+
+  /* 词条区固定亮色：词典自带的样式是按亮色设计的，跟着外壳变暗会花 */
+  --entry-bg: #ffffff;
+  --entry-fg: #1b1d21;
+}
+
+/* 暗色（默认）：悬浮窗形态 */
+:root[data-theme='dark'] {
+  --surface: #26282f;
+  --surface-alt: #2a2d2e;
+  --surface-raised: #2f323a;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-soft: rgba(255, 255, 255, 0.07);
+  --text: #e2e8f0;
+  --text-secondary: #9aa5b1;
+  --text-muted: #8b95a5;
+  --text-faint: #6b7280;
+  --hover-bg: rgba(106, 140, 255, 0.18);
+  --input-bg: #3c3c3c;
+  --wash-1: rgba(106, 140, 255, 0.1);
+  --wash-2: rgba(168, 107, 255, 0.08);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.55);
+  --mask: rgba(8, 10, 16, 0.55);
+  color-scheme: dark;
+}
+
+/* 亮色：与 cal 默认皮肤一致 */
+:root[data-theme='light'] {
+  --surface: #ffffff;
+  --surface-alt: #f7f8fd;
+  --surface-raised: #ffffff;
+  --border: rgba(15, 23, 42, 0.08);
+  --border-soft: rgba(15, 23, 42, 0.06);
+  --text: #1f2937;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --text-faint: #9aa5b1;
+  --hover-bg: rgba(106, 140, 255, 0.08);
+  --input-bg: #ffffff;
+  --wash-1: rgba(106, 140, 255, 0.07);
+  --wash-2: rgba(168, 107, 255, 0.06);
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-modal: 0 24px 64px rgba(15, 23, 42, 0.22);
+  --mask: rgba(15, 23, 42, 0.35);
+  color-scheme: light;
+}

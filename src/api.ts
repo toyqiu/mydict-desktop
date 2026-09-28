@@ -14,6 +14,12 @@ export interface Settings {
   server_url: string
   username: string
   hotkey: string
+  /** dark（默认）| light */
+  theme: string
+  /** 失焦自动收起 */
+  hide_on_blur: boolean
+  /** 划词优先：有选中文字时直接查它，并以不抢焦点的方式展示 */
+  selection_first: boolean
 }
 
 export interface AuthStatus {

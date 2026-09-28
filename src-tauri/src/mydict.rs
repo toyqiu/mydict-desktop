@@ -47,6 +47,23 @@ pub struct Settings {
     pub server_url: String,
     pub username: String,
     pub hotkey: String,
+    /// 界面主题：dark（默认，悬浮窗形态）| light（与 cal 默认皮肤一致）
+    #[serde(default = "default_theme")]
+    pub theme: String,
+    /// 失焦即收起。X11 上要等 Rust 侧发出「已显示」事件后才生效（见 main.rs）
+    #[serde(default = "default_true")]
+    pub hide_on_blur: bool,
+    /// 划词优先：热键呼出时若系统里有选中文字，直接查它并以「不抢焦点」的方式展示
+    #[serde(default = "default_true")]
+    pub selection_first: bool,
+}
+
+fn default_theme() -> String {
+    "dark".to_string()
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -55,6 +72,9 @@ impl Default for Settings {
             server_url: String::new(),
             username: String::new(),
             hotkey: DEFAULT_HOTKEY.to_string(),
+            theme: default_theme(),
+            hide_on_blur: true,
+            selection_first: true,
         }
     }
 }
