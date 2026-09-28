@@ -1,0 +1,26 @@
+[package]
+name = "mydict-desktop"
+version = "0.1.0"
+description = "MyDict 的桌面查词器"
+authors = ["toyqiuwu"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# rustls 而非 native-tls：局域网部署用的是明文 http，但自建服务常换 https，
+# 用 rustls 免得依赖系统 openssl 版本（Windows 侧构建也少一个坑）
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
