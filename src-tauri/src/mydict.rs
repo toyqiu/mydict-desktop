@@ -56,6 +56,9 @@ pub struct Settings {
     /// 划词优先：热键呼出时若系统里有选中文字，直接查它并以「不抢焦点」的方式展示
     #[serde(default = "default_true")]
     pub selection_first: bool,
+    /// 剪贴板监听：复制文字（≤60 字）自动弹窗查词
+    #[serde(default = "default_true")]
+    pub clipboard_watch: bool,
 }
 
 fn default_theme() -> String {
@@ -75,6 +78,7 @@ impl Default for Settings {
             theme: default_theme(),
             hide_on_blur: true,
             selection_first: true,
+            clipboard_watch: true,
         }
     }
 }

@@ -6,6 +6,8 @@ export interface Hit {
   dictionary_name: string
   word: string
   phonetic?: string | null
+  /** 命中词典的源语言（zh-Hans/ja/…）：快捷搜索窗用它做语言标签分组 */
+  lang_from?: string | null
   /** false = 该词典语言方向与输入不一致（服务端退到其它语言的兜底结果） */
   lang_match?: boolean
 }
@@ -20,6 +22,8 @@ export interface Settings {
   hide_on_blur: boolean
   /** 划词优先：有选中文字时直接查它，并以不抢焦点的方式展示 */
   selection_first: boolean
+  /** 剪贴板监听：复制文字自动查（≤60 字） */
+  clipboard_watch: boolean
 }
 
 export interface AuthStatus {
@@ -41,5 +45,6 @@ export const api = {
   hideWindow: () => invoke<void>('hide_window'),
   note: (tag: string) => invoke<void>('note', { tag }),
   focusProbe: () => invoke<string>('focus_probe'),
+  openMain: () => invoke<void>('open_main'),
   openExternal: (url: string) => invoke<void>('open_external', { url }),
 }

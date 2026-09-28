@@ -24,6 +24,20 @@
         "resizable": true,
         "visible": false,
         "center": true
+      },
+      {
+        "label": "popup",
+        "title": "MyDict 快捷搜索",
+        "width": 560,
+        "height": 580,
+        "minWidth": 380,
+        "minHeight": 300,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": true,
+        "visible": false,
+        "center": true
       }
     ],
     "security": {

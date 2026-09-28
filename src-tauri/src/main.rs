@@ -13,6 +13,10 @@ use std::path::PathBuf;
 use tauri::{Emitter, Manager, WebviewWindow};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+
 use mydict::{AppState, AuthStatus, Hit, Settings};
 
 /// 默认热键。
@@ -28,6 +32,11 @@ const DEFAULT_HOTKEY: &str = "super+shift+d";
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            // 自启时静默进托盘：不带 --show，窗口保持隐藏
+            Some(vec!["--tray"]),
+        ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -45,14 +54,31 @@ fn main() {
             let spec = state.settings().hotkey;
             app.manage(state);
             register_hotkey(app.handle(), &spec);
+            // 托盘建不起来不该拖垮应用：热键与查词是主功能，托盘只是常驻入口
+            if let Err(err) = build_tray(app.handle()) {
+                eprintln!("[tray] 托盘构建失败（不影响热键与查词）：{err}");
+            }
+            start_clipboard_watch(app.handle().clone());
+            // 远程探针：MYDICT_DEBUG_EVAL='document.title=…' 让 popup 执行一段 JS 并把结果
+            // 写进窗口标题（GUI 里没有控制台，这是从外部看 DOM 状态的唯一通道）
+            if let Ok(js) = std::env::var("MYDICT_DEBUG_EVAL") {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(6000));
+                    if let Some(popup) = handle.get_webview_window("popup") {
+                        let _ = popup.eval(&js);
+                        eprintln!("[debug] eval 已执行");
+                    }
+                });
+            }
             // 调试开关 `--show`：启动就把窗口显示出来。热键被别的程序占用时（或没有 WM 的环境
             // 里）也能看界面、截图，不必先排除热键问题。
             if std::env::args().any(|arg| arg == "--show") {
-                if let Some(window) = app.get_webview_window("main") {
+                if let Some(window) = app.get_webview_window("popup") {
                     let _ = window.show();
                     let _ = window.set_focus();
                     app.state::<AppState>().set_window_visible(true);
-                    let _ = app.emit("mydict:shown", ShownPayload { focused: true });
+                    let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
                 }
             }
             Ok(())
@@ -68,12 +94,109 @@ fn main() {
             hide_window,
             selection_text,
             note,
+            open_main,
             focus_probe,
             hotkey_error,
             open_external,
         ])
         .run(tauri::generate_context!())
         .expect("应用启动失败");
+}
+
+/// 常驻托盘：显示/隐藏、设置、开机自启（勾选）、退出；左键点图标 = 切换窗口。
+///
+/// Linux 上托盘走 StatusNotifier（XFCE 面板的 indicator 插件提供宿主），没有宿主时图标不显示，
+/// 但不影响主功能——热键与 Esc 照旧可用。
+fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let autostart_on = app.autolaunch().is_enabled().unwrap_or(false);
+    let toggle_item = MenuItem::with_id(app, "toggle", "快捷搜索（显示 / 隐藏）", true, None::<&str>)?;
+    let main_item = MenuItem::with_id(app, "main", "词典主界面", true, None::<&str>)?;
+    let settings_item = MenuItem::with_id(app, "settings", "设置…", true, None::<&str>)?;
+    let autostart_item = CheckMenuItem::with_id(
+        app,
+        "autostart",
+        "开机自启",
+        true,
+        autostart_on,
+        None::<&str>,
+    )?;
+    let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &toggle_item,
+            &main_item,
+            &PredefinedMenuItem::separator(app)?,
+            &settings_item,
+            &PredefinedMenuItem::separator(app)?,
+            &autostart_item,
+            &PredefinedMenuItem::separator(app)?,
+            &quit_item,
+        ],
+    )?;
+
+    let mut builder = TrayIconBuilder::with_id("main")
+        .tooltip("MyDict 查词")
+        .menu(&menu)
+        // 左键留给「切换窗口」，菜单只在右键弹（点击即显菜单会让托盘很吵）
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "toggle" => toggle_window(app),
+            "main" => show_main(app),
+            "settings" => {
+                // 设置模态挂在快捷搜索窗里：显示 popup 再弹模态
+                if let Some(window) = app.get_webview_window("popup") {
+                    let _ = window.show();
+                    app.state::<AppState>().set_window_visible(true);
+                    let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
+                    let _ = app.emit_to("popup", "mydict:open-settings", ());
+                }
+            }
+            "autostart" => {
+                let manager = app.autolaunch();
+                let now = manager.is_enabled().unwrap_or(false);
+                let result = if now {
+                    manager.disable()
+                } else {
+                    manager.enable()
+                };
+                if let Err(err) = result {
+                    eprintln!("[tray] 切换开机自启失败：{err}");
+                }
+                let state = manager.is_enabled().unwrap_or(false);
+                app.state::<TrayState>()
+                    .autostart_item
+                    .set_checked(state)
+                    .ok();
+                eprintln!("[tray] 开机自启 = {state}");
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                toggle_window(tray.app_handle());
+            }
+        });
+
+    // 托盘图标**不显式设置**：默认就会用应用图标（蓝底白块，正是想要的样子）。
+    // 显式设置反而会在写图标临时文件时报 EACCES（来源不明，且 root/普通用户都复现）。
+    // 勾选项的句柄要留着——改完自启状态得把菜单里的勾同步过来
+    app.manage(TrayState {
+        autostart_item: autostart_item.clone(),
+    });
+    builder.build(app)?;
+    Ok(())
+}
+
+/// 托盘里需要留着的句柄
+struct TrayState {
+    autostart_item: CheckMenuItem<tauri::Wry>,
 }
 
 /// 注册（或重新注册）全局热键；失败原因记进状态，设置页要能看到——静默失败会让用户
@@ -210,7 +333,7 @@ fn key_code(token: &str) -> Result<Code, String> {
 /// 可见状态用 AppState 自己记账，**不能用 `is_visible()`**（X11/GTK 下它对无边框窗口恒为
 /// false，实测踩到：窗口明明显示着，第二次按热键却仍走呼出分支、收不起来）。
 fn toggle_window(app: &tauri::AppHandle) {
-    let Some(window) = app.get_webview_window("main") else {
+    let Some(window) = app.get_webview_window("popup") else {
         return;
     };
     let state = app.state::<AppState>();
@@ -219,7 +342,7 @@ fn toggle_window(app: &tauri::AppHandle) {
         eprintln!("[hotkey] 可见 → 收起");
         let _ = window.hide();
         state.set_window_visible(false);
-        let _ = app.emit("mydict:hidden", ());
+        let _ = app.emit_to("popup", "mydict:hidden", ());
         return;
     }
 
@@ -250,7 +373,7 @@ fn toggle_window(app: &tauri::AppHandle) {
             std::thread::sleep(std::time::Duration::from_millis(200));
             let _ = focus_window.set_focus();
         });
-        let _ = app.emit("mydict:shown", ShownPayload { focused: true });
+        let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
     } else {
         // 划词：只展示不抢焦点。前端收到 focused=false 就不会武装「失焦收起」，
         // 也不会去动输入框焦点。
@@ -262,8 +385,8 @@ fn toggle_window(app: &tauri::AppHandle) {
                 hand_focus_back(&id);
             });
         }
-        let _ = app.emit("mydict:word", selected);
-        let _ = app.emit("mydict:shown", ShownPayload { focused: false });
+        let _ = app.emit_to("popup", "mydict:word", selected);
+        let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: false });
     }
 }
 
@@ -301,6 +424,59 @@ fn hand_focus_back(window_id: &str) {
 #[cfg(not(all(unix, not(target_os = "macos"))))]
 fn hand_focus_back(_window_id: &str) {}
 
+/// 打开词典主界面（重型浏览窗口）；若快捷搜索窗开着，让它让位
+fn show_main(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    if let Some(popup) = app.get_webview_window("popup") {
+        let _ = popup.hide();
+        app.state::<AppState>().set_window_visible(false);
+    }
+}
+
+/// 剪贴板监听：轮询 CLIPBOARD，发现新的短文本就弹快捷搜索窗查词。
+///
+/// 用轮询而不是 X11 剪贴板事件：零额外依赖，700ms 的粒度对「复制→查词」足够；
+/// 去重靠 last（连续相同的复制不重复触发），窗口已可见时只更新结果、不重新定位。
+fn start_clipboard_watch(app: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        let mut last = String::new();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(700));
+            let (enabled, visible) = {
+                let state = app.state::<AppState>();
+                (state.settings().clipboard_watch, state.is_window_visible())
+            };
+            if !enabled {
+                continue;
+            }
+            #[cfg(all(unix, not(target_os = "macos")))]
+            let text = read_xclip("clipboard");
+            #[cfg(not(all(unix, not(target_os = "macos"))))]
+            let text = String::new();
+            // 只认 ≤60 字的文本：更长的多半是整段内容，不是查词意图
+            let trimmed = text.trim().to_string();
+            if trimmed.is_empty() || trimmed.chars().count() > 60 || trimmed == last {
+                continue;
+            }
+            last = trimmed.clone();
+            if visible {
+                let _ = app.emit_to("popup", "mydict:word", trimmed);
+                continue;
+            }
+            if let Some(window) = app.get_webview_window("popup") {
+                place_near_cursor(&window);
+                let _ = window.show();
+                app.state::<AppState>().set_window_visible(true);
+                let _ = app.emit_to("popup", "mydict:word", trimmed);
+                let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: false });
+            }
+        }
+    });
+}
+
 /// 给前端的「窗口已显示」事件载荷
 #[derive(Clone, serde::Serialize)]
 struct ShownPayload {
@@ -317,18 +493,31 @@ struct ShownPayload {
 #[cfg(all(unix, not(target_os = "macos")))]
 fn read_selection() -> String {
     for selection in ["primary", "clipboard"] {
-        if let Ok(output) = std::process::Command::new("xclip")
-            .args(["-o", "-selection", selection])
-            .output()
-        {
-            if output.status.success() {
-                let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !text.is_empty() {
-                    return text;
-                }
-            }
+        let text = read_xclip(selection);
+        if !text.is_empty() {
+            return text;
         }
     }
+    String::new()
+}
+
+/// 读指定选区（X11）；无内容/无属主时返回空串
+#[cfg(all(unix, not(target_os = "macos")))]
+fn read_xclip(selection: &str) -> String {
+    let Ok(output) = std::process::Command::new("xclip")
+        .args(["-o", "-selection", selection])
+        .output()
+    else {
+        return String::new();
+    };
+    if !output.status.success() {
+        return String::new();
+    }
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+#[cfg(not(all(unix, not(target_os = "macos"))))]
+fn read_xclip(_selection: &str) -> String {
     String::new()
 }
 
@@ -443,6 +632,13 @@ fn focus_probe() -> String {
     }
 }
 
+/// 前端请求打开词典主界面（popup 的 ⧉ 按钮）。
+/// 不用 JS 的 WebviewWindow.getByLabel：它对 Rust 配置里创建的窗口不一定可见。
+#[tauri::command]
+fn open_main(app: tauri::AppHandle) {
+    show_main(&app);
+}
+
 /// 前端的诊断写入 stderr（GUI 里没有控制台，这个能把「谁触发了收起」这种线索留下来）
 #[tauri::command]
 fn note(tag: String) {
@@ -455,14 +651,18 @@ fn selection_text() -> String {
     read_selection()
 }
 
+/// 收起「发起调用的那个窗口」：popup 的 Esc/失焦收起走这里。
+/// （之前写死隐藏 main——双窗口改造后 popup 永远收不起来，就是这一行。）
 #[tauri::command]
-fn hide_window(app: tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
+fn hide_window(app: tauri::AppHandle, window: tauri::Window) {
+    {
         let _ = window.hide();
         eprintln!("[hide] 前端请求收起");
-        // 同步记账：否则下一次热键会以为「已经可见」而只做 hide（表现为按了没反应）
-        app.state::<AppState>().set_window_visible(false);
-        let _ = app.emit("mydict:hidden", ());
+        // 记账只对应 popup（热键/剪贴板的状态机针对它）；主界面的收起与此无关
+        if window.label() == "popup" {
+            app.state::<AppState>().set_window_visible(false);
+        }
+        let _ = app.emit_to("popup", "mydict:hidden", ());
     }
 }
 
