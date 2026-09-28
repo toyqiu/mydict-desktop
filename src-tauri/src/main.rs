@@ -206,7 +206,10 @@ fn register_hotkey(app: &tauri::AppHandle, spec: &str) {
     let _ = app.global_shortcut().unregister_all();
     match parse_hotkey(spec) {
         Ok(shortcut) => match app.global_shortcut().register(shortcut) {
-            Ok(()) => state.set_hotkey_error(None),
+            Ok(()) => {
+                eprintln!("[hotkey] 注册成功：{spec}");
+                state.set_hotkey_error(None);
+            }
             Err(err) => state.set_hotkey_error(Some(format!("热键 {spec} 注册失败（可能被别的程序占用）：{err}"))),
         },
         Err(err) => state.set_hotkey_error(Some(err)),
@@ -355,8 +358,8 @@ fn toggle_window(app: &tauri::AppHandle) {
     // 划词模式下要把焦点还给用户原来的窗口：X11 的 WM 在 map 新窗口时会自动聚焦，
     // 光是不调 set_focus() 不够——得记住原活动窗口、呼出后再还回去。
     let previous_active = if selected.is_empty() { None } else { active_window_id() };
-    place_near_cursor(&window);
     let _ = window.show();
+    place_near_cursor(&window);
     state.set_window_visible(true);
     eprintln!(
         "[hotkey] 呼出（{}）",
@@ -467,8 +470,8 @@ fn start_clipboard_watch(app: tauri::AppHandle) {
                 continue;
             }
             if let Some(window) = app.get_webview_window("popup") {
-                place_near_cursor(&window);
                 let _ = window.show();
+                place_near_cursor(&window);
                 app.state::<AppState>().set_window_visible(true);
                 let _ = app.emit_to("popup", "mydict:word", trimmed);
                 let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: false });
