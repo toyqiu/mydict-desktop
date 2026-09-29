@@ -15,6 +15,13 @@ import { mountSettingsModal } from './settings-modal'
 import './theme.css'
 import './popup.css'
 
+// mousedown 诊断：真实点击是否到达 DOM（写 stderr，见 /tmp/mydict-desktop.log）
+window.addEventListener(
+  'mousedown',
+  (e) => void api.note(`popup mousedown ${e.clientX},${e.clientY} trusted=${e.isTrusted} target=${(e.target as HTMLElement)?.tagName}`),
+  true,
+)
+
 const LANG_LABELS: Record<string, string> = {
   'zh-Hans': '简中',
   'zh-Hant': '繁中',
@@ -61,7 +68,7 @@ app.innerHTML = `
     </footer>
   </div>
 
-  <div class="modal-mask" id="p-settings-host"></div>
+  <div id="p-settings-host"></div>
 `
 
 const wordInput = element<HTMLInputElement>('p-word')
@@ -298,8 +305,7 @@ element('p-settings').addEventListener('click', () => {
   void api.note('⚙ 点击')
   modal.open()
 })
-element('p-main').addEventListener('click', () => void openMain())
-element('p-settings').addEventListener('click', () => modal.open())
+
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {

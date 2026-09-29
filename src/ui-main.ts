@@ -6,6 +6,13 @@ import { mountSettingsModal } from './settings-modal'
 import './theme.css'
 import './styles.css'
 
+// mousedown 诊断：真实点击是否到达 DOM（写 stderr，见 /tmp/mydict-desktop.log）
+window.addEventListener(
+  'mousedown',
+  (e) => void api.note(`main mousedown ${e.clientX},${e.clientY} trusted=${e.isTrusted} target=${(e.target as HTMLElement)?.tagName}`),
+  true,
+)
+
 /**
  * 词典主界面：搜索框 + 命中列表 + 词条区。
  *

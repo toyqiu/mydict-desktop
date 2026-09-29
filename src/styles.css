@@ -13,11 +13,6 @@
   box-sizing: border-box;
 }
 
-/* 作者样式里的 display:flex 会盖过浏览器对 [hidden] 的 display:none，显式压住 */
-[hidden] {
-  display: none !important;
-}
-
 html,
 body {
   margin: 0;
@@ -341,116 +336,6 @@ body {
   line-height: 1.7;
 }
 
-/* ---------- 设置模态窗 ---------- */
-
-.modal-mask {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--mask);
-  /* 全页唯一一处 backdrop-filter（性能，见文件头注释） */
-  backdrop-filter: blur(6px);
-  z-index: 50;
-}
-
-.modal-card {
-  display: flex;
-  flex-direction: column;
-  width: min(560px, calc(100vw - 48px));
-  max-height: calc(100vh - 64px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  /* 模态卡片也吃极光洗底（cal 的 .modal-content 同理） */
-  background-color: var(--surface);
-  background-image: linear-gradient(180deg, var(--wash-1) 0%, var(--wash-2) 100%);
-  box-shadow: var(--shadow-modal);
-  overflow: hidden;
-}
-
-.modal-head {
-  display: flex;
-  align-items: center;
-  padding: 16px 18px 12px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.modal-head h2 {
-  margin: 0;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  color: var(--text);
-}
-
-.modal-head .icon-btn {
-  margin-left: auto;
-}
-
-.modal-body {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 18px;
-  overflow: auto;
-}
-
-.field-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.group-label {
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  color: var(--text-muted);
-  text-transform: uppercase;
-}
-
-.field-group label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.78rem;
-  color: var(--text-secondary);
-}
-
-.field-group label > span {
-  flex: 0 0 76px;
-}
-
-.field-group input[type='text'],
-.field-group input[type='password'] {
-  flex: 1;
-  min-width: 0;
-  padding: 9px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-soft);
-  background: var(--input-bg);
-  color: var(--text);
-  font-size: 0.84rem;
-  outline: none;
-  transition:
-    border-color var(--dur) var(--ease),
-    box-shadow var(--dur) var(--ease);
-}
-
-.field-group input[type='text']:focus,
-.field-group input[type='password']:focus {
-  border-color: var(--accent-ring);
-  box-shadow: 0 0 0 4px var(--accent-soft);
-}
-
-.field-group .hint {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.7rem;
-  line-height: 1.7;
-}
-
 /* 开关行 */
 .switch {
   display: flex;
@@ -497,23 +382,6 @@ body {
   transform: translateX(15px);
 }
 
-.modal-foot {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 18px 18px;
-  border-top: 1px solid var(--border-soft);
-}
-
-.modal-foot .status-inline {
-  flex: 1;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-}
-
-.modal-foot .status-inline.error {
-  color: var(--danger);
-}
 
 .modal-foot .primary {
   padding: 9px 20px;
