@@ -177,6 +177,8 @@ async function loadEntry(hit: Hit): Promise<void> {
       frame = createEntryFrame({
         baseUrl: () => settings.server_url,
         onHeight: (height) => {
+          // 高度链路诊断：词条「高度超低」问题时看这里——子页报了多少、最终设了多少
+          console.error(`[height] key=${hitKey(hit)} 报=${height}`)
           if (frame && height > 0) frame.element.style.height = `${height}px`
         },
         onEntry: (word) => {
