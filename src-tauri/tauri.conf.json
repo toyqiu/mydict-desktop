@@ -46,8 +46,12 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "appimage"],
-    "icon": ["icons/icon.png"],
+    "targets": [
+      "deb"
+    ],
+    "icon": [
+      "icons/icon.png"
+    ],
     "category": "Utility",
     "shortDescription": "MyDict 桌面查词器",
     "longDescription": "全局热键呼出搜索框，查 MyDict 并复用其词条渲染。"
