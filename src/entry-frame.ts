@@ -65,7 +65,14 @@ export function createEntryFrame(options: EntryFrameOptions): EntryFrame {
         options.onEscape?.()
         break
       case 'mydict:audio-unsupported':
+        console.error(`[audio] unsupported ${String(data.url ?? '')}`)
         options.onAudioUnsupported?.()
+        break
+      case 'mydict:audio-error':
+        console.error(`[audio] error ${String(data.url ?? '')}`)
+        break
+      case 'mydict:audio-ended':
+        console.error(`[audio] ended ${String(data.url ?? '')}`)
         break
       default:
         break

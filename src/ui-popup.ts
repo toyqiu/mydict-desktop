@@ -150,11 +150,20 @@ async function toggleExpand(hit: Hit): Promise<void> {
   if (expandedKey === key) {
     expandedKey = null
     renderAccordion()
+    setStatus('')
     return
   }
   expandedKey = key
   renderAccordion()
+  reportExpandedDict(hit)
   await loadEntry(hit)
+}
+
+/** 展开时在状态栏亮出当前词典与位置——iframe 拉高后其余标题条在视口外，这是唯一的锚 */
+function reportExpandedDict(hit: Hit): void {
+  const items = visibleHits()
+  const n = items.findIndex((h) => hitKey(h) === hitKey(hit)) + 1
+  setStatus(`${hit.dictionary_name}（${n}/${items.length}）· ↑/↓ 切换词典`)
 }
 
 async function loadEntry(hit: Hit): Promise<void> {
@@ -330,6 +339,18 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     if (modal.isOpen()) modal.close()
     else void api.hideWindow()
+    return
+  }
+  // ↑/↓ 切换展开的词典（对齐网页版 ←/→ 的 moveExpanded）。单行输入框里这两个键
+  // 没有原生用途，聚焦时也接管； 原查询词不丢。
+  if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+    const items = visibleHits()
+    if (items.length === 0) return
+    event.preventDefault()
+    const index = items.findIndex((h) => hitKey(h) === expandedKey)
+    const delta = event.key === 'ArrowDown' ? 1 : -1
+    const next = items[(((index + delta) % items.length) + items.length) % items.length]
+    void toggleExpand(next)
   }
 })
 
