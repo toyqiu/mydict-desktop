@@ -140,47 +140,51 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         // 左键留给「切换窗口」，菜单只在右键弹（点击即显菜单会让托盘很吵）
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id().as_ref() {
-            "toggle" => toggle_window(app),
-            "main" => show_main(app),
-            "settings" => {
-                // 设置模态挂在快捷搜索窗里：显示 popup 再弹模态
-                if let Some(window) = app.get_webview_window("popup") {
-                    let _ = window.show();
-                    app.state::<AppState>().set_window_visible(true);
-                    let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
-                    let _ = app.emit_to("popup", "mydict:open-settings", ());
+        .on_menu_event(|app, event| {
+            let id = event.id().as_ref().to_string();
+            eprintln!("[menu] 触发：{id}");
+            // 菜单 activate 回调跑在主线程（GTK）：在这里直接做窗口操作会与菜单的
+            // deactivation 重入，实测会把 libappindicator 的菜单服务搞死——之后宿主
+            // 再也弹不出菜单。全部动作派发到独立线程，回调立即返回。
+            let app = app.clone();
+            std::thread::spawn(move || match id.as_str() {
+                "toggle" => toggle_window(&app),
+                "main" => show_main(&app),
+                "settings" => {
+                    if let Some(window) = app.get_webview_window("popup") {
+                        let _ = window.show();
+                        app.state::<AppState>().set_window_visible(true);
+                        let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
+                        let _ = app.emit_to("popup", "mydict:open-settings", ());
+                    }
                 }
-            }
-            "autostart" => {
-                let manager = app.autolaunch();
-                let now = manager.is_enabled().unwrap_or(false);
-                let result = if now {
-                    manager.disable()
-                } else {
-                    manager.enable()
-                };
-                if let Err(err) = result {
-                    eprintln!("[tray] 切换开机自启失败：{err}");
+                "autostart" => {
+                    let manager = app.autolaunch();
+                    let now = manager.is_enabled().unwrap_or(false);
+                    let result = if now { manager.disable() } else { manager.enable() };
+                    if let Err(err) = result {
+                        eprintln!("[tray] 切换开机自启失败：{err}");
+                    }
+                    let state = manager.is_enabled().unwrap_or(false);
+                    app.state::<TrayState>().autostart_item.set_checked(state).ok();
+                    eprintln!("[tray] 开机自启 = {state}");
                 }
-                let state = manager.is_enabled().unwrap_or(false);
-                app.state::<TrayState>()
-                    .autostart_item
-                    .set_checked(state)
-                    .ok();
-                eprintln!("[tray] 开机自启 = {state}");
-            }
-            "quit" => app.exit(0),
-            _ => {}
+                "quit" => app.exit(0),
+                _ => {}
+            });
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
+                button,
+                button_state,
                 ..
-            } = event
+            } = &event
             {
-                toggle_window(tray.app_handle());
+                eprintln!("[tray-icon] {button:?} {button_state:?}");
+                if *button == MouseButton::Left && *button_state == MouseButtonState::Up {
+                    let app = tray.app_handle().clone();
+                    std::thread::spawn(move || toggle_window(&app));
+                }
             }
         });
 
@@ -419,8 +423,10 @@ fn active_window_id() -> Option<String> {
 /// 把键盘焦点还给指定窗口（`windowfocus` 只改焦点、不抬升窗口，我们的悬浮层仍在最上）
 #[cfg(all(unix, not(target_os = "macos")))]
 fn hand_focus_back(window_id: &str) {
+    // 不带 --sync：同步等待 WM 完成焦点转移可能阻塞调用线程；焦点最终归属由 WM 决定，
+    // 我们只表达意图
     let _ = std::process::Command::new("xdotool")
-        .args(["windowfocus", "--sync", window_id])
+        .args(["windowfocus", window_id])
         .output();
 }
 
