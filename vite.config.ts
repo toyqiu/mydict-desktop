@@ -12,5 +12,13 @@ export default defineConfig({
   build: {
     target: 'es2021',
     sourcemap: true,
+    rollupOptions: {
+      // 多页输入：main 窗口用 index.html，popup 窗口用 popup.html——两个窗口各自的
+      // js/css 打进各自的 chunk，谁也不会拿错样式
+      input: {
+        main: 'index.html',
+        popup: 'popup.html',
+      },
+    },
   },
 })

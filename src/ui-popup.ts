@@ -18,7 +18,18 @@ import './popup.css'
 // mousedown 诊断：真实点击是否到达 DOM（写 stderr，见 /tmp/mydict-desktop.log）
 window.addEventListener(
   'mousedown',
-  (e) => void api.note(`popup mousedown ${e.clientX},${e.clientY} trusted=${e.isTrusted} target=${(e.target as HTMLElement)?.tagName}`),
+  (e) => {
+    const stack = document
+      .elementsFromPoint(e.clientX, e.clientY)
+      .slice(0, 3)
+      .map((el) => `${el.tagName}${el.id ? '#' + el.id : ''}[${String(el.className).slice(0, 20)}]`)
+      .join(' >> ')
+    const head = document.querySelector('button.acc-head')
+    const hr = head ? head.getBoundingClientRect() : null
+    void api.note(
+      `popup mousedown ${e.clientX},${e.clientY} trusted=${e.isTrusted} 栈=${stack} 首标题条=${hr ? `${Math.round(hr.x)},${Math.round(hr.y)} ${Math.round(hr.width)}x${Math.round(hr.height)}` : '无'}`,
+    )
+  },
   true,
 )
 
@@ -171,6 +182,13 @@ async function loadEntry(hit: Hit): Promise<void> {
       frames.set(key, frame)
     }
     frame.load(html)
+    // 挂载：renderAccordion 跑在 frame 创建之前（那时 body 还是空的，CSS 对空 body
+    // 是 display:none），所以加载完成后必须由这里挂载；renderAccordion 的挂载逻辑
+    // 只服务「渲染时 frame 已存在」的路径
+    if (expandedKey === key) {
+      const body = accHost.querySelector(`[data-body="${key}"]`)
+      if (body && frame.element.parentElement !== body) body.appendChild(frame.element)
+    }
     setStatus('')
   } catch (error) {
     setStatus(String(error), 'error')
@@ -281,6 +299,7 @@ accHost.addEventListener('click', (event) => {
   const head = (event.target as HTMLElement).closest<HTMLButtonElement>('button.acc-head')
   if (!head || !head.dataset.key) return
   const hit = visibleHits().find((h) => hitKey(h) === head.dataset.key)
+  void api.note(`acc 点击 key=${head.dataset.key} 命中=${hit ? hitKey(hit) : '无'}`)
   if (hit) void toggleExpand(hit)
 })
 

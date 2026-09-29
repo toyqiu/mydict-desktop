@@ -37,7 +37,8 @@
         "skipTaskbar": true,
         "resizable": true,
         "visible": false,
-        "center": true
+        "center": true,
+        "url": "popup.html"
       }
     ],
     "security": {

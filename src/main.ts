@@ -1,18 +1,9 @@
 /**
- * 入口分流：同一份前端 bundle 服务两个窗口。
+ * 词典主界面窗口的入口（窗口与页面的对应见 popup.html / vite.config 的多页输入）：
+ * main 窗口 → index.html → 本文件 → ui-main；popup 窗口 → popup.html → popup.ts → ui-popup。
  *
- * - popup：快捷搜索窗（全局热键 / 划词 / 剪贴板监听唤起，轻量手风琴面板）
- * - main：词典主界面（列表 + 词条的完整浏览形态）
- *
- * 两个窗口加载同一个 index.html，按 window.label 挂载各自的 UI 模块。
+ * 曾经用单页 + window.label 动态 import 分流——vite 会把动态分支的 CSS 拆成独立
+ * chunk，其 <link> 在 tauri 的 asset 协议下不会注入（实测 popup 拿不到自己的样式表，
+ * 手风琴整个瘪掉），所以改成多页入口、各加载各的。
  */
-
-import { getCurrentWindow } from '@tauri-apps/api/window'
-
-const label = getCurrentWindow().label
-
-if (label === 'popup') {
-  void import('./ui-popup')
-} else {
-  void import('./ui-main')
-}
+import './ui-main'
