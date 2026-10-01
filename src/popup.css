@@ -150,6 +150,9 @@
 }
 
 .acc-item {
+  /* overflow:hidden 的 flex 子项自动最小尺寸是 0：命中一多（范围标签出现后单次搜索可
+     返回几十条）所有条目被均匀压成细条，词典标题全部叠在一起。必须禁止收缩。 */
+  flex: none;
   border: 1px solid var(--border-soft);
   border-radius: 14px;
   background: var(--surface-alt);

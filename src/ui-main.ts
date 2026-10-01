@@ -46,7 +46,7 @@ app.innerHTML = `
       <button class="primary" type="submit">查询</button>
     </form>
 
-    <div class="status" id="status" hidden></div>
+    <div class="status" id="status"></div>
 
     <nav class="langs" id="langs" hidden></nav>
 
@@ -105,7 +105,8 @@ function applyTheme(theme: string) {
 function setStatus(message: string, kind: 'info' | 'error' = 'info') {
   statusBox.textContent = message
   statusBox.className = `status ${kind}`
-  statusBox.hidden = !message
+  // 空文本靠 CSS 的 .status:empty 隐身（保留布局），不再用 hidden 属性——
+  // 隐现会改变文档流高度，正是切换标签闪动的来源之一
 }
 
 function escapeHtml(raw: string): string {

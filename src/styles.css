@@ -173,6 +173,12 @@ body {
   border-left: 3px solid var(--accent);
   border-radius: var(--radius-soft);
   background: var(--surface-alt);
+  .status:empty {
+  visibility: hidden;
+}
+
+/* 空的时候只隐身、不退出布局：状态条隐现会推挤下方结果区（切换标签闪动的来源之一） */
+  min-height: 1.2em;
   color: var(--text-secondary);
   font-size: 0.78rem;
 }

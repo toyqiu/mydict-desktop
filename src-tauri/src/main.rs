@@ -136,7 +136,12 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         ],
     )?;
 
+    // 图标显式来自内嵌 PNG：实测依赖「默认应用图标」时 `/run/user/<uid>/tray-icon` 里
+    // 从未写入 PNG，面板只能显示占位破图。from_bytes 需要 tauri 的 image-png 特性（已开）。
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/icon.png"))
+        .map_err(|err| tauri::Error::AssetNotFound(format!("内嵌托盘图标解码失败：{err}")))?;
     let mut builder = TrayIconBuilder::with_id("main")
+        .icon(icon)
         .tooltip("MyDict 查词")
         .menu(&menu)
         // 左键留给「切换窗口」，菜单只在右键弹（点击即显菜单会让托盘很吵）
@@ -189,8 +194,6 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             }
         });
 
-    // 托盘图标**不显式设置**：默认就会用应用图标（蓝底白块，正是想要的样子）。
-    // 显式设置反而会在写图标临时文件时报 EACCES（来源不明，且 root/普通用户都复现）。
     // 勾选项的句柄要留着——改完自启状态得把菜单里的勾同步过来
     app.manage(TrayState {
         autostart_item: autostart_item.clone(),
