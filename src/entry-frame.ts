@@ -18,6 +18,8 @@
  *   mydict:audio-unsupported → 发音三种候选都放不了
  */
 
+import { invoke } from '@tauri-apps/api/core'
+
 export interface EntryFrameOptions {
   /**
    * 服务器根地址，如 http://192.168.5.197:4815；尾部斜杠会自动补。
@@ -35,6 +37,17 @@ export interface EntryFrame {
   element: HTMLIFrameElement
   load: (html: string) => void
   destroy: () => void
+}
+
+/**
+ * 诊断走 Rust 的 `note`（写 stderr → /tmp/mydict-desktop-<uid>.log）。
+ *
+ * **不要用 console.***：WebView 的控制台不落盘（实测：同一实例里 Rust 的 eprintln 有日志，
+ * 而 TS 里加的 [height]/[audio] console 一行都没有），GUI 下等于没有诊断。词条高度那次
+ * 排查就是靠这个通道才看得见。
+ */
+function note(tag: string): void {
+  void invoke('note', { tag }).catch(() => undefined)
 }
 
 export function createEntryFrame(options: EntryFrameOptions): EntryFrame {
@@ -65,14 +78,14 @@ export function createEntryFrame(options: EntryFrameOptions): EntryFrame {
         options.onEscape?.()
         break
       case 'mydict:audio-unsupported':
-        console.error(`[audio] unsupported ${String(data.url ?? '')}`)
+        note(`[audio] unsupported ${String(data.url ?? '')}`)
         options.onAudioUnsupported?.()
         break
       case 'mydict:audio-error':
-        console.error(`[audio] error ${String(data.url ?? '')}`)
+        note(`[audio] error ${String(data.url ?? '')}`)
         break
       case 'mydict:audio-ended':
-        console.error(`[audio] ended ${String(data.url ?? '')}`)
+        note(`[audio] ended ${String(data.url ?? '')}`)
         break
       default:
         break

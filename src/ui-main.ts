@@ -168,6 +168,7 @@ async function runSearch(next: string) {
     showEmpty(false)
     setStatus('')
     activeIndex = 0
+    entryHost.scrollTop = 0
     renderHits()
     await selectHit(0)
   } catch (error) {
@@ -187,6 +188,9 @@ async function selectHit(index: number) {
   try {
     const html = await api.entryHtml(hit.dictionary_id, queryWord, [hit.id])
     entryFrame?.load(html)
+    // 换词条必须把词条区滚回顶部：容器是 overflow:auto，长词条滚下去之后再看一条短词条，
+    // 视口会停在短词条下方——整块看起来是空的（用户报的「点开词条看不到任何内容」）。
+    entryHost.scrollTop = 0
   } catch (error) {
     setStatus(String(error), 'error')
   }

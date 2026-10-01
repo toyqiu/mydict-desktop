@@ -155,6 +155,10 @@ async function toggleExpand(hit: Hit): Promise<void> {
   }
   expandedKey = key
   renderAccordion()
+  // 换展开项时把它带回视口：手风琴区是 overflow:auto，长词条滚下去之后再看别的词典，
+  // 新标题条会落在视口之外，看起来像「点了没反应」。
+  const head = accHost.querySelector<HTMLElement>(`button.acc-head[data-key="${key}"]`)
+  if (head && head.scrollIntoView) head.scrollIntoView({ block: 'nearest' })
   reportExpandedDict(hit)
   await loadEntry(hit)
 }
@@ -270,6 +274,8 @@ async function runSearch(next: string): Promise<void> {
     }
     regroup()
     renderLangs()
+    // 新查询从顶部开始看，否则沿用上一次的滚动位置，新词条可能整个落在视口之外
+    accHost.scrollTop = 0
     // 默认展开排名第一的词典（当前语言组里的第一条）
     expandedKey = hitKey(visibleHits()[0])
     renderAccordion()
