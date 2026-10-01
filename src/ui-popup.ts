@@ -81,9 +81,7 @@ let hits: Hit[] = []
 // 库里有哪几种语言就显示哪几项，与这一次命中了什么无关。scope 为空 = 全部（服务端按输入语言路由）。
 let langTabs: { lang: string; label: string; dictIds: number[] }[] = []
 let activeScope = ''
-let expandedKey: string | null = null
 let queryWord = ''
-const frames = new Map<string, EntryFrame>()
 
 const setStatus = (message: string, kind: 'info' | 'error' = 'info') => {
   statusBox.textContent = message
@@ -149,47 +147,87 @@ const scopeDictIds = (): number[] | undefined =>
 
 /* ---------------- 手风琴词条区 ---------------- */
 
-const hitKey = (hit: Hit): string => `${hit.dictionary_id}-${hit.id}`
+// 按词典分组：同一部词典命中多条（同形词、多词形）合并成一个面板，展开时一次渲染
+// 该词典的全部词条——服务端把多条合成一个文档（条目间有标题分隔），对齐网页版
+// HomeView 的 groups。面板顺序沿用后端给的顺序（优先语言优先、再按 sort_order）。
+interface DictGroup {
+  key: string
+  dictionaryId: number
+  dictionaryName: string
+  word: string
+  phonetic?: string | null
+  entries: Hit[]
+}
 
-async function toggleExpand(hit: Hit): Promise<void> {
-  const key = hitKey(hit)
-  if (expandedKey === key) {
+let groups: DictGroup[] = []
+let expandedKey: string | null = null
+let batchIndex = 0
+// 词条渲染接口对 entry_ids 有 200 条上限（防伪造，见后端 dict.py）；搜韵这类
+// 「每首诗一个词条」的词典对常见词就是几百条，按批渲染
+const BATCH_SIZE = 200
+const frames = new Map<string, EntryFrame>()
+
+function regroup(): void {
+  const map = new Map<number, DictGroup>()
+  for (const hit of hits) {
+    let group = map.get(hit.dictionary_id)
+    if (!group) {
+      group = {
+        key: String(hit.dictionary_id),
+        dictionaryId: hit.dictionary_id,
+        dictionaryName: hit.dictionary_name,
+        word: hit.word,
+        phonetic: hit.phonetic,
+        entries: [],
+      }
+      map.set(hit.dictionary_id, group)
+    }
+    group.entries.push(hit)
+  }
+  groups = [...map.values()]
+}
+
+const expandedGroup = (): DictGroup | null => groups.find((g) => g.key === expandedKey) ?? null
+
+async function toggleExpand(group: DictGroup): Promise<void> {
+  if (expandedKey === group.key) {
     expandedKey = null
+    batchIndex = 0
     renderAccordion()
     setStatus('')
     return
   }
-  expandedKey = key
+  expandedKey = group.key
+  batchIndex = 0
   renderAccordion()
   // 换展开项时把它带回视口：手风琴区是 overflow:auto，长词条滚下去之后再看别的词典，
   // 新标题条会落在视口之外，看起来像「点了没反应」。
-  const head = accHost.querySelector<HTMLElement>(`button.acc-head[data-key="${key}"]`)
+  const head = accHost.querySelector<HTMLElement>(`button.acc-head[data-key="${group.key}"]`)
   if (head && head.scrollIntoView) head.scrollIntoView({ block: 'nearest' })
-  reportExpandedDict(hit)
-  await loadEntry(hit)
+  reportExpandedDict(group)
+  await loadEntry(group)
 }
 
 /** 展开时在状态栏亮出当前词典与位置——iframe 拉高后其余标题条在视口外，这是唯一的锚 */
-function reportExpandedDict(hit: Hit): void {
-  const items = hits
-  const n = items.findIndex((h) => hitKey(h) === hitKey(hit)) + 1
-  setStatus(`${hit.dictionary_name}（${n}/${items.length}）· ↑/↓ 切换词典`)
+function reportExpandedDict(group: DictGroup): void {
+  const n = groups.findIndex((g) => g.key === group.key) + 1
+  setStatus(`${group.dictionaryName}（${n}/${groups.length}）· ↑/↓ 切换词典`)
 }
 
-async function loadEntry(hit: Hit): Promise<void> {
+async function loadEntry(group: DictGroup): Promise<void> {
   setStatus('载入词条…')
   try {
-    const html = await api.entryHtml(hit.dictionary_id, queryWord, [hit.id], settings.theme)
-    // 复用主界面的 entry-frame：同一个文档只挂在一个 iframe 上，切组时销毁重建
-    const key = hitKey(hit)
+    const ids = group.entries
+      .slice(batchIndex * BATCH_SIZE, (batchIndex + 1) * BATCH_SIZE)
+      .map((item) => item.id)
+    const html = await api.entryHtml(group.dictionaryId, queryWord, ids, settings.theme)
+    const key = group.key
     let frame = frames.get(key)
     if (!frame) {
       frame = createEntryFrame({
         baseUrl: () => settings.server_url,
         theme: () => settings.theme,
         onHeight: (height) => {
-          // 高度链路诊断：词条「高度超低」问题时看这里——子页报了多少、最终设了多少
-          console.error(`[height] key=${hitKey(hit)} 报=${height}`)
           if (frame && height > 0) frame.element.style.height = `${height}px`
         },
         onEntry: (word) => {
@@ -205,17 +243,44 @@ async function loadEntry(hit: Hit): Promise<void> {
       frames.set(key, frame)
     }
     frame.load(html)
-    // 挂载：renderAccordion 跑在 frame 创建之前（那时 body 还是空的，CSS 对空 body
-    // 是 display:none），所以加载完成后必须由这里挂载；renderAccordion 的挂载逻辑
-    // 只服务「渲染时 frame 已存在」的路径
     if (expandedKey === key) {
       const body = accHost.querySelector(`[data-body="${key}"]`)
-      if (body && frame.element.parentElement !== body) body.appendChild(frame.element)
+      if (body) {
+        if (frame.element.parentElement !== body) body.appendChild(frame.element)
+        // 分批导航：>200 条的词典按批渲染（网页版同款），按钮在词条文档下方
+        const batchCount = Math.ceil(group.entries.length / BATCH_SIZE)
+        let nav = body.querySelector('.batch-nav') as HTMLElement | null
+        if (batchCount > 1) {
+          if (!nav) {
+            nav = document.createElement('div')
+            nav.className = 'batch-nav'
+            body.appendChild(nav)
+          }
+          const start = batchIndex * BATCH_SIZE + 1
+          const end = Math.min((batchIndex + 1) * BATCH_SIZE, group.entries.length)
+          nav.innerHTML = `
+            <button type="button" data-batch="prev" ${batchIndex === 0 ? 'disabled' : ''}>‹ 上一批</button>
+            <span>第 ${batchIndex + 1}/${batchCount} 批 · 第 ${start}-${end} 条</span>
+            <button type="button" data-batch="next" ${batchIndex + 1 >= batchCount ? 'disabled' : ''}>下一批 ›</button>`
+        } else if (nav) {
+          nav.remove()
+        }
+      }
     }
     setStatus('')
   } catch (error) {
     setStatus(String(error), 'error')
   }
+}
+
+function gotoBatch(delta: number): void {
+  const group = expandedGroup()
+  if (!group) return
+  const batchCount = Math.ceil(group.entries.length / BATCH_SIZE)
+  const next = batchIndex + delta
+  if (next < 0 || next >= batchCount) return
+  batchIndex = next
+  void loadEntry(group)
 }
 
 function renderAccordion(): void {
@@ -228,21 +293,19 @@ function renderAccordion(): void {
     }
   }
 
-  accHost.innerHTML = hits
-    .map((hit) => {
-      const key = hitKey(hit)
-      const expanded = key === expandedKey
+  accHost.innerHTML = groups
+    .map((group) => {
+      const expanded = group.key === expandedKey
       return `
-      <div class="acc-item ${expanded ? 'expanded' : ''}" data-key="${key}">
-        <button class="acc-head" data-key="${key}">
-          <span class="word">${escapeHtml(hit.word)}</span>
-          ${hit.phonetic ? `<span class="phonetic">${escapeHtml(hit.phonetic)}</span>` : ''}
-          <span class="dict">${escapeHtml(hit.dictionary_name)}</span>
+      <div class="acc-item ${expanded ? 'expanded' : ''}" data-key="${group.key}">
+        <button class="acc-head" data-key="${group.key}">
+          <span class="word">${escapeHtml(group.word)}</span>
+          ${group.phonetic ? `<span class="phonetic">${escapeHtml(group.phonetic)}</span>` : ''}
+          ${group.entries.length > 1 ? `<span class="entries-count">共 ${group.entries.length} 条</span>` : ''}
+          <span class="dict">${escapeHtml(group.dictionaryName)}</span>
           <span class="chev">${expanded ? '▾' : '▸'}</span>
         </button>
-        <div class="acc-body" data-body="${key}">
-          ${expanded ? '' : ''}
-        </div>
+        <div class="acc-body" data-body="${group.key}"></div>
       </div>`
     })
     .join('')
@@ -280,10 +343,13 @@ async function runSearch(next: string): Promise<void> {
     }
     // 新查询从顶部开始看，否则沿用上一次的滚动位置，新词条可能整个落在视口之外
     accHost.scrollTop = 0
-    // 默认展开排名第一的词典（当前语言组里的第一条）
-    expandedKey = hitKey(hits[0])
+    regroup()
+    // 默认展开排名第一的词典（该词典的全部词条合成一个文档）
+    expandedKey = groups[0]?.key ?? null
+    batchIndex = 0
     renderAccordion()
-    await loadEntry(hits[0])
+    const first = groups[0]
+    if (first) await loadEntry(first)
   } catch (error) {
     setStatus(String(error), 'error')
   }
@@ -324,11 +390,17 @@ element('p-form').addEventListener('submit', (event) => {
 })
 
 accHost.addEventListener('click', (event) => {
+  // 分批导航按钮（>200 条的词典），在标题条判断之前处理
+  const batchBtn = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-batch]')
+  if (batchBtn) {
+    gotoBatch(batchBtn.dataset.batch === 'prev' ? -1 : 1)
+    return
+  }
   const head = (event.target as HTMLElement).closest<HTMLButtonElement>('button.acc-head')
   if (!head || !head.dataset.key) return
-  const hit = hits.find((h) => hitKey(h) === head.dataset.key)
-  void api.note(`acc 点击 key=${head.dataset.key} 命中=${hit ? hitKey(hit) : '无'}`)
-  if (hit) void toggleExpand(hit)
+  const group = groups.find((g) => g.key === head.dataset.key)
+  void api.note(`acc 点击 key=${head.dataset.key} 命中=${group ? group.key : '无'}`)
+  if (group) void toggleExpand(group)
 })
 
 langsRow.addEventListener('click', (event) => {
@@ -375,10 +447,10 @@ document.addEventListener('keydown', (event) => {
     return
   }
   if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-    const items = hits
+    const items = groups
     if (items.length === 0) return
     event.preventDefault()
-    const index = items.findIndex((h) => hitKey(h) === expandedKey)
+    const index = items.findIndex((g) => g.key === expandedKey)
     const delta = event.key === 'ArrowDown' ? 1 : -1
     const next = items[(((index + delta) % items.length) + items.length) % items.length]
     void toggleExpand(next)

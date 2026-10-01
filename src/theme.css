@@ -293,3 +293,47 @@ body {
 .modal-mask {
   border-radius: 10px;
 }
+
+/* ---------- 多词条面板：词条计数徽标 + 分批导航 ---------- */
+.acc-head .entries-count,
+.hits .entries-count {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.acc-head .entries-count {
+  margin-left: auto;
+}
+
+.acc-head .entries-count + .dict {
+  margin-left: 6px;
+}
+
+.batch-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.batch-nav button {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-soft);
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.batch-nav button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.acc-body .batch-nav {
+  border-top: 1px solid var(--border-soft);
+}

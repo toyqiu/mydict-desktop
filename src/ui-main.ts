@@ -56,6 +56,12 @@ app.innerHTML = `
       <section class="entry" id="entry"></section>
     </main>
 
+    <div class="batch-nav" id="batch-nav" hidden>
+      <button type="button" data-batch="prev">‹ 上一批</button>
+      <span id="batch-label"></span>
+      <button type="button" data-batch="next">下一批 ›</button>
+    </div>
+
     <div class="empty" id="empty">
       <span class="empty-logo"></span>
       <span class="empty-title" id="empty-title">连接你的 MyDict</span>
@@ -92,6 +98,20 @@ let hits: Hit[] = []
 let activeIndex = -1
 let queryWord = ''
 let entryFrame: EntryFrame | null = null
+// 按词典分组：同一部词典命中多条（同形词、多词形）合并成一个面板，展开时一次渲染该词典
+// 的全部词条——服务端把多条合成一个文档（条目间有标题分隔），对齐网页版 HomeView 的 groups
+interface DictGroup {
+  key: string
+  dictionaryId: number
+  dictionaryName: string
+  word: string
+  phonetic?: string | null
+  entries: Hit[]
+}
+let groups: DictGroup[] = []
+let batchIndex = 0
+// 词条渲染接口对 entry_ids 有 200 条上限（防伪造，见后端 dict.py）
+const BATCH_SIZE = 200
 // 命中按词典源语言分组（语义对齐网页版：zh/zh-Hans/zh-Hant 都归「中文」），
 // 标签行点选切换，命中列表只显示当前组
 // 语言标签 = 检索范围选择器（对齐网页版）：数据源是**词典库**而不是命中结果，
@@ -201,15 +221,78 @@ function renderTabs(): void {
 const scopeDictIds = (): number[] | undefined =>
   langTabs.find((t) => t.lang === activeScope && t.dictIds.length)?.dictIds
 
+function regroup(): void {
+  const map = new Map<number, DictGroup>()
+  for (const hit of hits) {
+    let group = map.get(hit.dictionary_id)
+    if (!group) {
+      group = {
+        key: String(hit.dictionary_id),
+        dictionaryId: hit.dictionary_id,
+        dictionaryName: hit.dictionary_name,
+        word: hit.word,
+        phonetic: hit.phonetic,
+        entries: [],
+      }
+      map.set(hit.dictionary_id, group)
+    }
+    group.entries.push(hit)
+  }
+  groups = [...map.values()]
+}
+
+function renderBatchNav(): void {
+  const group = groups[activeIndex]
+  const nav = element<HTMLDivElement>('batch-nav')
+  const batchCount = group ? Math.ceil(group.entries.length / BATCH_SIZE) : 1
+  if (!group || batchCount <= 1) {
+    nav.hidden = true
+    return
+  }
+  const start = batchIndex * BATCH_SIZE + 1
+  const end = Math.min((batchIndex + 1) * BATCH_SIZE, group.entries.length)
+  element<HTMLSpanElement>('batch-label').textContent =
+    `第 ${batchIndex + 1}/${batchCount} 批 · 第 ${start}-${end} 条`
+  const prev = nav.querySelector<HTMLButtonElement>('[data-batch="prev"]')
+  const next = nav.querySelector<HTMLButtonElement>('[data-batch="next"]')
+  if (prev) prev.disabled = batchIndex === 0
+  if (next) next.disabled = batchIndex + 1 >= batchCount
+  nav.hidden = false
+}
+
+function gotoBatch(delta: number): void {
+  const group = groups[activeIndex]
+  if (!group) return
+  const batchCount = Math.ceil(group.entries.length / BATCH_SIZE)
+  const next = batchIndex + delta
+  if (next < 0 || next >= batchCount) return
+  batchIndex = next
+  void loadGroup(group)
+}
+
+async function loadGroup(group: DictGroup): Promise<void> {
+  const ids = group.entries
+    .slice(batchIndex * BATCH_SIZE, (batchIndex + 1) * BATCH_SIZE)
+    .map((item) => item.id)
+  try {
+    const html = await api.entryHtml(group.dictionaryId, queryWord, ids, settings.theme)
+    entryFrame?.load(html)
+    entryHost.scrollTop = 0
+  } catch (error) {
+    setStatus(String(error), 'error')
+  }
+  renderBatchNav()
+}
+
 function renderHits() {
-  const items = hits
-  hitsList.innerHTML = items
+  hitsList.innerHTML = groups
     .map(
-      (hit, index) => `
+      (group, index) => `
       <li class="hit ${index === activeIndex ? 'active' : ''}" data-index="${index}">
-        <span class="word">${escapeHtml(hit.word)}</span>
-        ${hit.phonetic ? `<span class="phonetic">${escapeHtml(hit.phonetic)}</span>` : ''}
-        <span class="dict ${hit.lang_match === false ? 'fallback' : ''}">${escapeHtml(hit.dictionary_name)}</span>
+        <span class="word">${escapeHtml(group.word)}</span>
+        ${group.phonetic ? `<span class="phonetic">${escapeHtml(group.phonetic)}</span>` : ''}
+        <span class="dict ${group.entries.some((item) => item.lang_match === false) ? 'fallback' : ''}">${escapeHtml(group.dictionaryName)}</span>
+        ${group.entries.length > 1 ? `<span class="entries-count">共 ${group.entries.length} 条</span>` : ''}
       </li>`,
     )
     .join('')
@@ -226,6 +309,7 @@ async function runSearch(next: string) {
     hits = await api.search(trimmed, scopeDictIds())
     if (hits.length === 0) {
       activeIndex = -1
+      groups = []
       hitsList.innerHTML = ''
       entryHost.innerHTML = ''
       showEmpty(true)
@@ -237,6 +321,8 @@ async function runSearch(next: string) {
     setStatus('')
     activeIndex = 0
     entryHost.scrollTop = 0
+    regroup()
+    batchIndex = 0
     renderHits()
     await selectHit(0)
   } catch (error) {
@@ -249,12 +335,16 @@ async function runSearch(next: string) {
 }
 
 async function selectHit(index: number) {
-  const hit = hits[index]
-  if (!hit) return
+  const group = groups[index]
+  if (!group) return
   activeIndex = index
+  batchIndex = 0
   renderHits()
   try {
-    const html = await api.entryHtml(hit.dictionary_id, queryWord, [hit.id], settings.theme)
+    const ids = group.entries
+      .slice(0, BATCH_SIZE)
+      .map((item) => item.id)
+    const html = await api.entryHtml(group.dictionaryId, queryWord, ids, settings.theme)
     entryFrame?.load(html)
     // 换词条必须把词条区滚回顶部：容器是 overflow:auto，长词条滚下去之后再看一条短词条，
     // 视口会停在短词条下方——整块看起来是空的（用户报的「点开词条看不到任何内容」）。
@@ -318,6 +408,12 @@ hitsList.addEventListener('click', (event) => {
   void selectHit(Number(li.dataset.index))
 })
 
+element('batch-nav').addEventListener('click', (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-batch]')
+  if (!btn) return
+  gotoBatch(btn.dataset.batch === 'prev' ? -1 : 1)
+})
+
 element('btn-hide').addEventListener('click', () => void api.hideWindow())
 element('btn-settings').addEventListener('click', openSettings)
 element('empty-cta').addEventListener('click', openSettings)
@@ -348,11 +444,10 @@ document.addEventListener('keydown', (event) => {
     return
   }
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-    const items = hits
-    if (items.length === 0) return
+    if (groups.length === 0) return
     event.preventDefault()
     const delta = event.key === 'ArrowDown' ? 1 : -1
-    void selectHit((activeIndex + delta + items.length) % items.length)
+    void selectHit((activeIndex + delta + groups.length) % groups.length)
   }
 })
 
