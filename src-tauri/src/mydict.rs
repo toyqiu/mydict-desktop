@@ -215,6 +215,26 @@ impl AppState {
         self.window_visible.load(Ordering::Relaxed)
     }
 
+    /// 追加一行到配置目录下的 debug.log（毫秒时间戳）。
+    ///
+    /// Windows 的 release 构建带 `windows_subsystem = "windows"`，stderr 是无效句柄，
+    /// eprintln! 全部丢失——GUI 出问题后毫无证据。关键路径统一走这里落盘。
+    pub fn log(&self, msg: &str) {
+        use std::io::Write;
+        eprintln!("{msg}");
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.dir.join("debug.log"))
+        {
+            let _ = writeln!(f, "{millis} {msg}");
+        }
+    }
+
     pub fn set_window_visible(&self, value: bool) {
         self.window_visible.store(value, Ordering::Relaxed);
     }

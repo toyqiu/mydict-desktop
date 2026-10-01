@@ -727,18 +727,24 @@ fn open_main(app: tauri::AppHandle) {
     show_main(&app);
 }
 
-/// 前端的诊断写入 stderr（GUI 里没有控制台，这个能把「谁触发了收起」这种线索留下来）
+/// 前端的诊断写入 stderr + 配置目录 debug.log（Windows release 下 stderr 无效，
+/// 文件日志是唯一的诊断通道）
 #[tauri::command]
-fn note(tag: String) {
-    eprintln!("[front] {tag}");
+fn note(app: tauri::AppHandle, tag: String) {
+    app.state::<AppState>().log(&format!("[front] {tag}"));
 }
 
-/// 词条图片查看器：新建一个**独立窗口**（无边框、置顶、铺满词条所在显示器），
-/// 词典窗口保持原样——全屏看图不该顺带改词典窗口的几何。
+/// 词条图片查看器：**启动时就在 tauri.conf.json 里建好**（隐藏），点图只做三件事——
+/// 改几何到词条所在显示器、投递载荷（emit mydict:viewer-image）、前端就绪后显示。
 ///
-/// 图片载荷走两条路：窗口新建时页面加载完调 take_viewer_payload 取暂存的初始载荷
-/// （emit 可能早于页面监听装好，靠暂存避免竞态）；窗口已开着又点了别的图，直接
-/// emit mydict:viewer-image 让它换图。
+/// 为什么不在点图时创建窗口：v0.1.0~v0.1.2 在 Windows 上连环假死（点图无反应 →
+/// 主界面关闭/托盘全灭 → 单实例拦住二次启动，只能注销）。运行时创建窗口这条路在
+/// Windows/WebView2 上不可靠（换线程、换时机都试过仍假死），干脆彻底绕开——
+/// 窗口随应用启动建好、全程隐藏，点图路径只剩窗口方法与事件投递。
+///
+/// 图片载荷走两条路：窗口刚启动时页面调 take_viewer_payload（此刻必为 None，仅为
+/// 协议完整性保留）；正常路径是 emit mydict:viewer-image——页面自启动起就活着并
+/// 挂着监听，不存在「事件早于监听」的竞态。
 #[tauri::command]
 fn open_viewer(
     app: tauri::AppHandle,
@@ -749,88 +755,59 @@ fn open_viewer(
     index: usize,
 ) {
     let payload = mydict::ViewerPayload { src, alt, urls, index };
-    if let Some(viewer) = app.get_webview_window("viewer") {
-        let _ = viewer.set_focus();
-        let _ = app.emit_to("viewer", "mydict:viewer-image", payload);
+    let state = app.state::<AppState>();
+    let Some(viewer) = app.get_webview_window("viewer") else {
+        state.log("[viewer] 启动时创建的 viewer 窗口不见了");
         return;
-    }
+    };
+    // Linux 保持「不进任务栏」的原有形态；Windows 必须留在任务栏（逃生入口）。
+    let _ = viewer.set_skip_taskbar(!cfg!(windows));
     let monitor = window
         .current_monitor()
         .ok()
         .flatten()
         .or_else(|| window.primary_monitor().ok().flatten());
-    let Some(monitor) = monitor else {
-        eprintln!("[viewer] 创建查看器失败：拿不到显示器信息");
-        return;
-    };
-    let origin = *monitor.position();
-    let bounds = *monitor.size();
-    let scale = monitor.scale_factor();
-    app.state::<AppState>().stage_viewer_payload(payload);
-    // builder 的 position/inner_size 都是逻辑单位，显示器几何是物理像素
-    //
-    // **窗口必须在主线程创建**：open_viewer 跑在命令线程上，Windows 下从命令线程
-    // 直接 build() 会与 WebView2 的初始化互相等死——v0.1.1 实测点图后整个应用假死
-    // （点图无反应 → 主界面关闭/托盘全部无效 → 单实例把二次启动也拦住，只能注销）。
-    // Linux/GTK 跨线程建窗口没这个问题，所以此前只在 Windows 爆发。
-    let app_handle = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        let result = tauri::WebviewWindowBuilder::new(
-            &app_handle,
-            "viewer",
-            tauri::WebviewUrl::App("viewer.html".into()),
-        )
-        .title("图片查看器")
-        .decorations(false)
-        .always_on_top(true)
-        // Windows 上绝不 skip_taskbar：v0.1.0 实测「置顶 + 全屏 + 不进任务栏」的窗口
-        // 出问题时任务栏/Alt+Tab 都找不到它——进任务栏后至少随时可以关闭/切换。
-        .skip_taskbar(!cfg!(windows))
-        .resizable(false)
-        // 先隐藏，等前端取到图片、界面就绪后由 show_viewer 显示：WebView2 初始化
-        // 期间的默认白底不能露出来
-        .visible(false)
-        .focused(true)
-        .background_color(tauri::window::Color(0, 0, 0, 255))
-        .position(origin.x as f64 / scale, origin.y as f64 / scale)
-        .inner_size(bounds.width as f64 / scale, bounds.height as f64 / scale)
-        .build();
-        if let Err(err) = result {
-            eprintln!("[viewer] 创建查看器窗口失败：{err}");
-            // 别留下一个永远没人取的暂存载荷
-            app_handle
-                .state::<AppState>()
-                .take_viewer_payload();
-        } else {
-            eprintln!(
-                "[viewer] 打开 viewer {}x{}@{},{}",
-                bounds.width, bounds.height, origin.x, origin.y
-            );
-        }
-    });
+    if let Some(monitor) = monitor {
+        let origin = *monitor.position();
+        let bounds = *monitor.size();
+        let _ = viewer.set_size(tauri::PhysicalSize::new(bounds.width, bounds.height));
+        let _ = viewer.set_position(tauri::PhysicalPosition::new(origin.x, origin.y));
+        state.log(&format!(
+            "[viewer] 几何 {}x{}@{},{}",
+            bounds.width, bounds.height, origin.x, origin.y
+        ));
+    }
+    state.stage_viewer_payload(payload.clone());
+    let _ = app.emit_to("viewer", "mydict:viewer-image", payload);
+    state.log("[viewer] 载荷已投递，等前端就绪后 show_viewer");
 }
 
-/// 查看器页面就绪后取初始图片载荷（取走即清）
+/// 查看器页面就绪后取初始图片载荷（取走即清）。窗口随应用启动创建，页面启动时
+/// 调用此命令时通常还没有载荷（正常载荷走事件投递），保留是为了协议完整。
 #[tauri::command]
 fn take_viewer_payload(app: tauri::AppHandle) -> Option<mydict::ViewerPayload> {
     app.state::<AppState>().take_viewer_payload()
 }
 
 /// 查看器前端就绪（已拿到图片并开始渲染）后由前端调用：此刻显示窗口并聚焦。
-/// 与 `visible(false)` 的创建方式配套——黑底就绪后才上屏，WebView2 的白幕不会露出来。
+/// 窗口常驻隐藏，黑底界面就绪后才上屏。
 #[tauri::command]
 fn show_viewer(app: tauri::AppHandle) {
+    let state = app.state::<AppState>();
     if let Some(viewer) = app.get_webview_window("viewer") {
         let _ = viewer.show();
         let _ = viewer.set_focus();
+        state.log("[viewer] 已显示");
     }
 }
 
-/// 查看器里退出了（Esc/点空白），销毁窗口。popup/main 还在，应用不会跟着退出。
+/// 查看器里退出了（Esc/点空白），隐藏窗口（常驻，下次点图复用）。
 #[tauri::command]
 fn close_viewer(app: tauri::AppHandle) {
+    let state = app.state::<AppState>();
     if let Some(viewer) = app.get_webview_window("viewer") {
-        let _ = viewer.close();
+        let _ = viewer.hide();
+        state.log("[viewer] 已隐藏");
     }
 }
 
