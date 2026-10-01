@@ -15,6 +15,16 @@ export interface LightboxPayload {
   index: number
 }
 
+export interface LightboxMountOptions {
+  /**
+   * 查看器开/关时回调（true=打开）。宿主用它把窗口铺满显示器：灯箱的遮罩是 fixed 铺满
+   * **视口**，视口就是应用窗口——要铺满整个显示器只能把窗口本身拉到显示器大小。
+   */
+  onOpenChange?: (open: boolean) => void
+  /** 窗口会铺满屏幕时传 true：遮罩的四角圆角会露出桌面，铺屏状态下要去掉。 */
+  fullscreen?: boolean
+}
+
 export interface ImageLightbox {
   element: HTMLElement
   show(payload: LightboxPayload): void
@@ -30,7 +40,7 @@ const MAX_ZOOM = 20
 // 超过这个位移才算拖动，否则松手时会被当成「点了空白处」而退出
 const DRAG_THRESHOLD = 4
 
-export function mountImageLightbox(): ImageLightbox {
+export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLightbox {
   const overlay = document.createElement('div')
   overlay.className = 'lightbox'
   overlay.innerHTML = `
@@ -199,8 +209,10 @@ export function mountImageLightbox(): ImageLightbox {
 
   function close(): void {
     overlay.hidden = true
+    overlay.classList.remove('lightbox-full')
     open = false
     document.body.style.overflow = previousBodyOverflow
+    options.onOpenChange?.(false)
   }
 
   return {
@@ -209,9 +221,11 @@ export function mountImageLightbox(): ImageLightbox {
       images = payload.urls.length ? payload.urls : [payload.src]
       altText = payload.alt ?? ''
       overlay.hidden = false
+      overlay.classList.toggle('lightbox-full', !!options.fullscreen)
       open = true
       previousBodyOverflow = document.body.style.overflow
       document.body.style.overflow = 'hidden'
+      options.onOpenChange?.(true)
       showAt(payload.index)
     },
     hide: close,

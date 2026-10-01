@@ -108,6 +108,10 @@ fn main() {
             if !matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)) {
                 return;
             }
+            // 灯箱全屏的过渡事件不是用户的窗口摆放，记住它会把全屏尺寸写进 config.json
+            if window.state::<AppState>().is_viewer_fullscreen() {
+                return;
+            }
             let (Ok(position), Ok(size)) = (window.outer_position(), window.outer_size()) else {
                 return;
             };
@@ -143,6 +147,7 @@ fn main() {
             focus_probe,
             hotkey_error,
             open_external,
+            set_viewer_fullscreen,
         ])
         .run(tauri::generate_context!())
         .expect("应用启动失败");
@@ -710,6 +715,54 @@ fn open_main(app: tauri::AppHandle) {
 #[tauri::command]
 fn note(tag: String) {
     eprintln!("[front] {tag}");
+}
+
+/// 词条图片查看器的全屏开关：查看器打开时把所在窗口铺满整个显示器（而不是只盖住
+/// 应用窗口），关闭时还原原几何。
+///
+/// 不用 `set_fullscreen`：本机 xfwm4/xrdp 对这种无边框透明窗口跑 WM 全屏会把窗口
+/// 直接弄丢（实测设置成功但窗口再也不映射，应用还活着）。所以手动做——记住原几何、
+/// 定位到显示器原点、尺寸拉到显示器大小，这三个动作与 --show 恢复几何走的是同一条
+/// 已验证可用的路径。
+///
+/// 先记账再动窗口：铺屏/还原引发的 Moved/Resized 不是用户的窗口摆放，几何落盘逻辑
+/// 靠 viewer_fullscreen 标志跳过它们（见 on_window_event）。
+#[tauri::command]
+fn set_viewer_fullscreen(app: tauri::AppHandle, window: tauri::WebviewWindow, on: bool) {
+    let state = app.state::<AppState>();
+    if on {
+        let (Ok(position), Ok(size)) = (window.outer_position(), window.outer_size()) else {
+            eprintln!("[lightbox] 进全屏失败：拿不到当前窗口几何");
+            return;
+        };
+        let monitor = window.current_monitor().ok().flatten().or_else(|| window.primary_monitor().ok().flatten());
+        let Some(monitor) = monitor else {
+            eprintln!("[lightbox] 进全屏失败：拿不到显示器信息");
+            return;
+        };
+        state.stage_viewer_restore((position.x, position.y, size.width, size.height));
+        state.set_viewer_fullscreen(true);
+        let origin = monitor.position();
+        let bounds = monitor.size();
+        let _ = window.set_size(tauri::PhysicalSize::new(bounds.width, bounds.height));
+        let _ = window.set_position(tauri::PhysicalPosition::new(origin.x, origin.y));
+        eprintln!(
+            "[lightbox] fullscreen=on window={} monitor={}x{}@{},{}",
+            window.label(),
+            bounds.width,
+            bounds.height,
+            origin.x,
+            origin.y
+        );
+    } else {
+        if let Some((x, y, width, height)) = state.take_viewer_restore() {
+            let _ = window.set_size(tauri::PhysicalSize::new(width, height));
+            let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+        }
+        // 还原事件随后异步到达，此时标志已清，它们的几何与原来相同，落盘无害
+        state.set_viewer_fullscreen(false);
+        eprintln!("[lightbox] fullscreen=off window={}", window.label());
+    }
 }
 
 /// 读当前选中文字（前端在调试或将来做「划词快捷查」时可能要用）

@@ -1,4 +1,5 @@
 import { listen } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
 
 import { api, type Hit, type Settings } from './api'
 import { createEntryFrame, type EntryFrame } from './entry-frame'
@@ -475,7 +476,13 @@ void listen<Settings>('mydict:settings-updated', (event) => {
 // 模态必须挂进 DOM：此前只创建未 append，主窗口的 ⚙/「打开设置」点了没有任何反应
 settingsHost.appendChild(settingsModal.element)
 
-const lightbox = mountImageLightbox()
+const lightbox = mountImageLightbox({
+  // 铺满显示器：查看器开着时窗口本身进全屏，关闭时还原（Rust 侧跳过这期间的几何落盘）
+  onOpenChange: (open) => {
+    void invoke('set_viewer_fullscreen', { on: open }).catch(() => undefined)
+  },
+  fullscreen: true,
+})
 document.body.appendChild(lightbox.element)
 
 // 调试钩子：MYDICT_DEBUG_EVAL 注入的脚本可以用它驱动灯箱（与 Rust 侧的

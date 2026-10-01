@@ -150,6 +150,12 @@ pub struct AppState {
     /// `show()` 之后依然 false），于是「再按一次热键收起」永远走不到收起分支。这里自己记账，
     /// 由热键切换、Esc 收起、失焦收起三处共同维护。
     window_visible: AtomicBool,
+    /// 词条图片查看器（灯箱）正开着全屏。全屏过渡会触发 popup 的 Moved/Resized，
+    /// 这些事件的几何**绝不能**落盘——否则退出应用时 config.json 里存的是全屏尺寸，
+    /// 下次呼出窗口就铺满整个屏幕了。
+    viewer_fullscreen: AtomicBool,
+    /// 进全屏前的窗口几何（x, y, w, h），退出全屏时还原。不落盘。
+    viewer_restore: Mutex<Option<(i32, i32, u32, u32)>>,
 }
 
 struct Inner {
@@ -176,6 +182,8 @@ impl AppState {
             geometry_staging: Mutex::new(None),
             geometry_generation: AtomicU64::new(0),
             window_visible: AtomicBool::new(false),
+            viewer_fullscreen: AtomicBool::new(false),
+            viewer_restore: Mutex::new(None),
             inner: Mutex::new(Inner {
                 settings: persisted.settings,
                 tokens: persisted.tokens,
@@ -204,6 +212,22 @@ impl AppState {
 
     pub fn set_window_visible(&self, value: bool) {
         self.window_visible.store(value, Ordering::Relaxed);
+    }
+
+    pub fn is_viewer_fullscreen(&self) -> bool {
+        self.viewer_fullscreen.load(Ordering::Relaxed)
+    }
+
+    pub fn set_viewer_fullscreen(&self, value: bool) {
+        self.viewer_fullscreen.store(value, Ordering::Relaxed);
+    }
+
+    pub fn stage_viewer_restore(&self, geometry: (i32, i32, u32, u32)) {
+        *self.viewer_restore.lock().expect("state poisoned") = Some(geometry);
+    }
+
+    pub fn take_viewer_restore(&self) -> Option<(i32, i32, u32, u32)> {
+        self.viewer_restore.lock().expect("state poisoned").take()
     }
 
     pub fn popup_geometry(&self) -> Option<PopupGeometry> {

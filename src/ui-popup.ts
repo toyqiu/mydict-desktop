@@ -9,6 +9,7 @@
  */
 
 import { listen } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
 import { api, type Hit, type Settings } from './api'
 import { createEntryFrame, type EntryFrame } from './entry-frame'
 import { mountSettingsModal } from './settings-modal'
@@ -375,7 +376,13 @@ const modal = mountSettingsModal({
 })
 element('p-settings-host').appendChild(modal.element)
 
-const lightbox = mountImageLightbox()
+const lightbox = mountImageLightbox({
+  // 铺满显示器：查看器开着时窗口本身进全屏，关闭时还原（Rust 侧跳过这期间的几何落盘）
+  onOpenChange: (open) => {
+    void invoke('set_viewer_fullscreen', { on: open }).catch(() => undefined)
+  },
+  fullscreen: true,
+})
 document.body.appendChild(lightbox.element)
 
 // 调试钩子：MYDICT_DEBUG_EVAL 注入的脚本可以用它驱动灯箱（与 Rust 侧的

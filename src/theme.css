@@ -359,6 +359,11 @@ body {
   cursor: grabbing;
 }
 
+/* 铺满显示器的状态下（窗口本身被拉到屏幕大小）四角没有桌面可露，去掉圆角 */
+.lightbox.lightbox-full {
+  border-radius: 0;
+}
+
 .lightbox-img {
   position: absolute;
   top: 0;
