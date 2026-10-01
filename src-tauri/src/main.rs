@@ -76,12 +76,50 @@ fn main() {
             if std::env::args().any(|arg| arg == "--show") {
                 if let Some(window) = app.get_webview_window("popup") {
                     let _ = window.show();
+                    let geometry = app.state::<AppState>().popup_geometry();
+                    eprintln!("[show] popup_geometry={geometry:?}");
+                    if let Some(geometry) = geometry {
+                        // --show 调试路径同样恢复上一次的几何，与热键/剪贴板路径一致
+                        let r1 = window
+                            .set_size(tauri::PhysicalSize::new(geometry.width, geometry.height));
+                        let r2 = window
+                            .set_position(tauri::PhysicalPosition::new(geometry.x, geometry.y));
+                        eprintln!("[show] set_size={r1:?} set_position={r2:?}");
+                    }
                     let _ = window.set_focus();
                     app.state::<AppState>().set_window_visible(true);
                     let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
                 }
             }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // 快捷搜索窗的移动/缩放：记住上一次的尺寸与位置。拖动会连续触发事件，
+            // 这里只记最新值并交给防抖线程，静止 600ms 后落盘一次。
+            if window.label() != "popup" {
+                return;
+            }
+            if !matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)) {
+                return;
+            }
+            let (Ok(position), Ok(size)) = (window.outer_position(), window.outer_size()) else {
+                return;
+            };
+            let geometry = mydict::PopupGeometry {
+                x: position.x,
+                y: position.y,
+                width: size.width,
+                height: size.height,
+            };
+            let state = window.state::<AppState>();
+            let generation = state.stage_popup_geometry(geometry);
+            let handle = window.app_handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(600));
+                handle
+                    .state::<AppState>()
+                    .persist_popup_geometry_if_current(generation);
+            });
         })
         .invoke_handler(tauri::generate_handler![
             get_settings,
@@ -367,7 +405,15 @@ fn toggle_window(app: &tauri::AppHandle) {
     // 光是不调 set_focus() 不够——得记住原活动窗口、呼出后再还回去。
     let previous_active = if selected.is_empty() { None } else { active_window_id() };
     let _ = window.show();
-    place_near_cursor(&window);
+    // 用户拖过/缩放过就恢复上一次的几何；先 show 再定位（未映射窗口上定位会让
+    // WebKitGTK 的输入区域失效）。从未动过才贴光标居中。
+    match state.popup_geometry() {
+        Some(geometry) => {
+            let _ = window.set_size(tauri::PhysicalSize::new(geometry.width, geometry.height));
+            let _ = window.set_position(tauri::PhysicalPosition::new(geometry.x, geometry.y));
+        }
+        None => place_near_cursor(&window),
+    }
     state.set_window_visible(true);
     eprintln!(
         "[hotkey] 呼出（{}）",
@@ -481,7 +527,15 @@ fn start_clipboard_watch(app: tauri::AppHandle) {
             }
             if let Some(window) = app.get_webview_window("popup") {
                 let _ = window.show();
-                place_near_cursor(&window);
+                match app.state::<AppState>().popup_geometry() {
+                    Some(geometry) => {
+                        let _ = window
+                            .set_size(tauri::PhysicalSize::new(geometry.width, geometry.height));
+                        let _ = window
+                            .set_position(tauri::PhysicalPosition::new(geometry.x, geometry.y));
+                    }
+                    None => place_near_cursor(&window),
+                }
                 app.state::<AppState>().set_window_visible(true);
                 let _ = app.emit_to("popup", "mydict:word", trimmed);
                 let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: false });

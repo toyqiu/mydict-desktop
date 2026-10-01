@@ -8,7 +8,7 @@
 //! access 过期时用 refresh 静默换一次再重试，用户无感。
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -38,6 +38,15 @@ pub struct Hit {
 #[derive(Debug, Deserialize)]
 struct WebQueryResponse {
     results: Vec<Hit>,
+}
+
+/// 快捷搜索窗上一次的尺寸与位置（物理像素）。None = 用户没动过，呼出时仍贴光标。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct PopupGeometry {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// `/api/dict/dictionaries` 的条目：词典列表（语言标签行的数据源）
@@ -115,6 +124,8 @@ struct Persisted {
     settings: Settings,
     #[serde(default)]
     tokens: Tokens,
+    #[serde(default)]
+    popup_geometry: Option<PopupGeometry>,
 }
 
 /// 前端要的状态快照
@@ -129,6 +140,10 @@ pub struct AppState {
     pub client: reqwest::Client,
     dir: PathBuf,
     inner: Mutex<Inner>,
+    /// 快捷搜索窗几何的暂存与代数：拖动/缩放会连续触发事件，这里先记最新值，
+    /// 由防抖线程在静止后落盘（代数没变才写，避免旧线程覆盖新值）
+    geometry_staging: Mutex<Option<PopupGeometry>>,
+    geometry_generation: AtomicU64,
     /// 窗口当前是否可见。
     ///
     /// **不能用 `Window::is_visible()`**：X11/GTK 下它对这种无边框窗口恒为 false（实测：
@@ -140,6 +155,8 @@ pub struct AppState {
 struct Inner {
     settings: Settings,
     tokens: Tokens,
+    /// 快捷搜索窗上一次的几何；None = 用户没动过
+    popup_geometry: Option<PopupGeometry>,
     /// 热键注册失败的原因（占用了/写错了），前端设置页要能看到，不能静默失败
     hotkey_error: Option<String>,
 }
@@ -156,10 +173,13 @@ impl AppState {
                 .build()
                 .expect("构建 HTTP 客户端失败"),
             dir,
+            geometry_staging: Mutex::new(None),
+            geometry_generation: AtomicU64::new(0),
             window_visible: AtomicBool::new(false),
             inner: Mutex::new(Inner {
                 settings: persisted.settings,
                 tokens: persisted.tokens,
+                popup_geometry: persisted.popup_geometry,
                 hotkey_error: None,
             }),
         }
@@ -170,6 +190,7 @@ impl AppState {
         let persisted = Persisted {
             settings: inner.settings.clone(),
             tokens: inner.tokens.clone(),
+            popup_geometry: inner.popup_geometry,
         };
         drop(inner);
         if let Ok(raw) = serde_json::to_string_pretty(&persisted) {
@@ -183,6 +204,32 @@ impl AppState {
 
     pub fn set_window_visible(&self, value: bool) {
         self.window_visible.store(value, Ordering::Relaxed);
+    }
+
+    pub fn popup_geometry(&self) -> Option<PopupGeometry> {
+        self.inner.lock().expect("state poisoned").popup_geometry
+    }
+
+    /// 记下最新几何并返回新代数（防抖用）
+    pub fn stage_popup_geometry(&self, geometry: PopupGeometry) -> u64 {
+        *self.geometry_staging.lock().expect("state poisoned") = Some(geometry);
+        self.geometry_generation.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    /// 防抖到期后调用：代数仍是自己这代（期间没有新的移动/缩放）才落盘
+    pub fn persist_popup_geometry_if_current(&self, generation: u64) -> bool {
+        if self.geometry_generation.load(Ordering::Relaxed) != generation {
+            return false;
+        }
+        let staged = self.geometry_staging.lock().expect("state poisoned").take();
+        match staged {
+            Some(geometry) => {
+                self.inner.lock().expect("state poisoned").popup_geometry = Some(geometry);
+                self.save();
+                true
+            }
+            None => false,
+        }
     }
 
     pub fn settings(&self) -> Settings {
