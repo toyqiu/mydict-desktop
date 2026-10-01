@@ -2,6 +2,15 @@
 
 [MyDict](https://github.com/PoxenStudio/mydict) 的桌面查词器：**全局热键呼出搜索框，查词结果直接复用 MyDict 的词条渲染**。
 
+
+
+## 截图
+<img width="1493" height="850" alt="image" src="https://github.com/user-attachments/assets/38ac5e93-e359-4417-8b10-fa8121934202" />
+<img width="1247" height="868" alt="image" src="https://github.com/user-attachments/assets/45d4e5e9-db00-43ab-aefc-333e604e7cff" />
+
+
+
+
 ## 它做什么
 
 - 全局热键呼出一个无边框悬浮窗（默认 `super+shift+d`，可在设置里改）
