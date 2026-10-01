@@ -763,42 +763,51 @@ fn open_viewer(
         eprintln!("[viewer] 创建查看器失败：拿不到显示器信息");
         return;
     };
-    let origin = monitor.position();
-    let bounds = monitor.size();
+    let origin = *monitor.position();
+    let bounds = *monitor.size();
     let scale = monitor.scale_factor();
     app.state::<AppState>().stage_viewer_payload(payload);
     // builder 的 position/inner_size 都是逻辑单位，显示器几何是物理像素
-    let result = tauri::WebviewWindowBuilder::new(
-        &app,
-        "viewer",
-        tauri::WebviewUrl::App("viewer.html".into()),
-    )
-    .title("图片查看器")
-    .decorations(false)
-    .always_on_top(true)
-    // Windows 上绝不 skip_taskbar：v0.1.0 实测「置顶 + 全屏 + 不进任务栏」的窗口在
-    // WebView2 初始化完成前是一块白幕，任务栏/Alt+Tab 都找不到它，Alt+F4 也无焦点
-    // 可收——整台机器被锁死。进任务栏后至少随时可以从任务栏关闭/切换。
-    .skip_taskbar(!cfg!(windows))
-    .resizable(false)
-    // 先隐藏，等前端取到图片、界面就绪后由 show_viewer 显示：WebView2 初始化
-    // 期间的默认白底不能露出来
-    .visible(false)
-    .focused(true)
-    .background_color(tauri::window::Color(0, 0, 0, 255))
-    .position(origin.x as f64 / scale, origin.y as f64 / scale)
-    .inner_size(bounds.width as f64 / scale, bounds.height as f64 / scale)
-    .build();
-    if let Err(err) = result {
-        eprintln!("[viewer] 创建查看器窗口失败：{err}");
-        // 别留下一个永远没人取的暂存载荷
-        app.state::<AppState>().take_viewer_payload();
-    } else {
-        eprintln!(
-            "[viewer] 打开 viewer {}x{}@{},{}",
-            bounds.width, bounds.height, origin.x, origin.y
-        );
-    }
+    //
+    // **窗口必须在主线程创建**：open_viewer 跑在命令线程上，Windows 下从命令线程
+    // 直接 build() 会与 WebView2 的初始化互相等死——v0.1.1 实测点图后整个应用假死
+    // （点图无反应 → 主界面关闭/托盘全部无效 → 单实例把二次启动也拦住，只能注销）。
+    // Linux/GTK 跨线程建窗口没这个问题，所以此前只在 Windows 爆发。
+    let app_handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let result = tauri::WebviewWindowBuilder::new(
+            &app_handle,
+            "viewer",
+            tauri::WebviewUrl::App("viewer.html".into()),
+        )
+        .title("图片查看器")
+        .decorations(false)
+        .always_on_top(true)
+        // Windows 上绝不 skip_taskbar：v0.1.0 实测「置顶 + 全屏 + 不进任务栏」的窗口
+        // 出问题时任务栏/Alt+Tab 都找不到它——进任务栏后至少随时可以关闭/切换。
+        .skip_taskbar(!cfg!(windows))
+        .resizable(false)
+        // 先隐藏，等前端取到图片、界面就绪后由 show_viewer 显示：WebView2 初始化
+        // 期间的默认白底不能露出来
+        .visible(false)
+        .focused(true)
+        .background_color(tauri::window::Color(0, 0, 0, 255))
+        .position(origin.x as f64 / scale, origin.y as f64 / scale)
+        .inner_size(bounds.width as f64 / scale, bounds.height as f64 / scale)
+        .build();
+        if let Err(err) = result {
+            eprintln!("[viewer] 创建查看器窗口失败：{err}");
+            // 别留下一个永远没人取的暂存载荷
+            app_handle
+                .state::<AppState>()
+                .take_viewer_payload();
+        } else {
+            eprintln!(
+                "[viewer] 打开 viewer {}x{}@{},{}",
+                bounds.width, bounds.height, origin.x, origin.y
+            );
+        }
+    });
 }
 
 /// 查看器页面就绪后取初始图片载荷（取走即清）
