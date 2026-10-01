@@ -94,6 +94,7 @@ export function createEntryFrame(options: EntryFrameOptions): EntryFrame {
         // 解析口径与网页版 EntryFrame 一致：urls 缺失/坏数据时退化成单张
         const src = typeof data.src === 'string' && data.src ? data.src : ''
         if (!src) break
+        note(`[image] iframe→parent ${src.slice(-56)}`)
         const urls = Array.isArray(data.urls)
           ? data.urls.filter((item): item is string => typeof item === 'string' && !!item)
           : [src]

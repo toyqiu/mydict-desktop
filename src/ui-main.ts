@@ -503,7 +503,12 @@ entryFrame = createEntryFrame({
   onEscape: () => void api.hideWindow(),
   onAudioUnsupported: () => setStatus('这条发音放不了（词典里的音频格式或文件缺失）', 'error'),
   onImage: (payload) => {
-    void invoke('open_viewer', payload).catch(() => undefined)
+    void invoke('note', { tag: `[image->viewer] main ${payload.src.slice(-56)}` }).catch(
+      () => undefined,
+    )
+    invoke('open_viewer', payload).catch((err) =>
+      invoke('note', { tag: `[viewer-err] ${String(err)}` }).catch(() => undefined),
+    )
   },
 })
 entryHost.appendChild(entryFrame.element)
