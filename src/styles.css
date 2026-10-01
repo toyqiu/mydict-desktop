@@ -18,7 +18,9 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: var(--surface);
+  /* 透明：窗口圆角由 .app 裁出（见 theme.css）。这里一旦刷不透明底色，
+     四个角就会被 body 盖成 90 度直角（主界面四角全直的根因）。 */
+  background: transparent;
   color: var(--text);
   font:
     14px/1.55 -apple-system,
