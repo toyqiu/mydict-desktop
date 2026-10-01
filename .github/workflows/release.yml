@@ -1,0 +1,46 @@
+name: release
+
+# 打 tag（v*）自动出安装包：Windows 走官方 runner（Linux 无法交叉编译 NSIS），
+# 产物直接上传到同名的 GitHub Release（deb 由本地构建后手动附到同一 Release）。
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 安装前端依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建 Windows 安装包（NSIS）
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'mydict-desktop ${{ github.ref_name }}'
+          releaseBody: 'Windows 安装包（NSIS，x64）。Linux deb 见同一 Release 的附件。'
+          releaseDraft: false
+          prerelease: false
+          # bundle.targets 配置里只有 deb（本地 Linux 构建）；Windows 上按参数改出 NSIS
+          args: --bundles nsis

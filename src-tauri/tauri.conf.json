@@ -53,7 +53,8 @@
       "deb"
     ],
     "icon": [
-      "icons/icon.png"
+      "icons/icon.png",
+      "icons/icon.ico"
     ],
     "category": "Utility",
     "shortDescription": "MyDict 桌面查词器",

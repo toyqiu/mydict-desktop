@@ -28,6 +28,12 @@ use mydict::{AppState, AuthStatus, Hit, PublicDict, Settings};
 ///   （`HotKey already registered`）
 ///
 /// 所以默认取 `super+shift+d`（Linux 上实测可用），设置里可改；注册失败时界面会明确报出来。
+/// Windows 上 super 即 Win 键，Win 系组合易与系统撞车（Win+F 是反馈中心），取 `ctrl+alt+d`。
+#[cfg(target_os = "linux")]
+const DEFAULT_HOTKEY: &str = "super+shift+d";
+#[cfg(target_os = "windows")]
+const DEFAULT_HOTKEY: &str = "ctrl+alt+d";
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 const DEFAULT_HOTKEY: &str = "super+shift+d";
 
 fn main() {
