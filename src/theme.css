@@ -274,3 +274,22 @@
   transform: translateX(16px);
   background: #fff;
 }
+
+/* ---------- 无边框窗口：四角 10px 圆弧 ----------
+ * 窗口 transparent=true，html/body 透明，由 .app 圆角裁出窗口形状；
+ * 设置模态的遮罩是 fixed 定位、不在 .app 的裁剪链里，必须自己补同样的圆角。 */
+html,
+body {
+  background: transparent;
+}
+
+.app {
+  border-radius: 10px;
+  overflow: hidden;
+  /* 圆角外不再有渐变洗底，底色由 surface 提供（暗/亮主题各自取值） */
+  background-color: var(--surface);
+}
+
+.modal-mask {
+  border-radius: 10px;
+}

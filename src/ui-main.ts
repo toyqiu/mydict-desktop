@@ -346,6 +346,12 @@ document.addEventListener('keydown', (event) => {
 // 托盘菜单里的「设置…」
 void listen('mydict:open-settings', () => openSettings())
 
+// 激活（托盘/弹窗 ⧉ 打开）即聚焦搜索框并全选：随时可以改词重查
+void listen('mydict:main-shown', () => {
+  input.focus()
+  input.select()
+})
+
 // 另一个窗口保存了设置：同步副本并立即换主题（此前「主界面暗色、面板亮色」就是这么来的）
 void listen<Settings>('mydict:settings-updated', (event) => {
   settings = event.payload

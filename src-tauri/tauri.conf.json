@@ -23,7 +23,8 @@
         "skipTaskbar": true,
         "resizable": true,
         "visible": false,
-        "center": true
+        "center": true,
+        "transparent": true
       },
       {
         "label": "popup",
@@ -38,7 +39,8 @@
         "resizable": true,
         "visible": false,
         "center": true,
-        "url": "popup.html"
+        "url": "popup.html",
+        "transparent": true
       }
     ],
     "security": {

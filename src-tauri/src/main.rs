@@ -61,15 +61,21 @@ fn main() {
             start_clipboard_watch(app.handle().clone());
             // 远程探针：MYDICT_DEBUG_EVAL='document.title=…' 让 popup 执行一段 JS 并把结果
             // 写进窗口标题（GUI 里没有控制台，这是从外部看 DOM 状态的唯一通道）
-            if let Ok(js) = std::env::var("MYDICT_DEBUG_EVAL") {
-                let handle = app.handle().clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(6000));
-                    if let Some(popup) = handle.get_webview_window("popup") {
-                        let _ = popup.eval(&js);
-                        eprintln!("[debug] eval 已执行");
-                    }
-                });
+            for (var_name, label) in [
+                ("MYDICT_DEBUG_EVAL", "popup"),
+                ("MYDICT_DEBUG_EVAL_MAIN", "main"),
+            ] {
+                if let Ok(js) = std::env::var(var_name) {
+                    let handle = app.handle().clone();
+                    let label = label.to_string();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(6000));
+                        if let Some(w) = handle.get_webview_window(&label) {
+                            let _ = w.eval(&js);
+                            eprintln!("[debug] eval 已执行：{label}");
+                        }
+                    });
+                }
             }
             // 调试开关 `--show`：启动就把窗口显示出来。热键被别的程序占用时（或没有 WM 的环境
             // 里）也能看界面、截图，不必先排除热键问题。
@@ -488,6 +494,8 @@ fn show_main(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.set_focus();
+        // 激活即聚焦搜索框并全选（前端处理）：随时可以改词重查
+        let _ = app.emit_to("main", "mydict:main-shown", ());
     }
     if let Some(popup) = app.get_webview_window("popup") {
         let _ = popup.hide();
