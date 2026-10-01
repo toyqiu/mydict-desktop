@@ -686,8 +686,11 @@ async fn entry_html(
     dictionary_id: i64,
     word: String,
     entry_ids: Vec<i64>,
+    theme: Option<String>,
 ) -> Result<String, String> {
-    state.entry_html(dictionary_id, &word, &entry_ids).await
+    state
+        .entry_html(dictionary_id, &word, &entry_ids, theme.as_deref())
+        .await
 }
 
 /// 焦点探针：返回「当前活动窗口」的 `id|名字`，供前端判断失焦是真离开还是幽灵事件。

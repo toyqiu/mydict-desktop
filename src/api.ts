@@ -50,8 +50,8 @@ export const api = {
   dictionaries: (scope = 'usable') => invoke<DictInfo[]>('dictionaries', { scope }),
   search: (word: string, dictIds?: number[]) =>
     invoke<Hit[]>('search', { word, dictIds: dictIds ?? null }),
-  entryHtml: (dictionaryId: number, word: string, entryIds: number[]) =>
-    invoke<string>('entry_html', { dictionaryId, word, entryIds }),
+  entryHtml: (dictionaryId: number, word: string, entryIds: number[], theme?: string) =>
+    invoke<string>('entry_html', { dictionaryId, word, entryIds, theme: theme ?? null }),
   hideWindow: () => invoke<void>('hide_window'),
   note: (tag: string) => invoke<void>('note', { tag }),
   focusProbe: () => invoke<string>('focus_probe'),

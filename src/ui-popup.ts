@@ -178,13 +178,14 @@ function reportExpandedDict(hit: Hit): void {
 async function loadEntry(hit: Hit): Promise<void> {
   setStatus('载入词条…')
   try {
-    const html = await api.entryHtml(hit.dictionary_id, queryWord, [hit.id])
+    const html = await api.entryHtml(hit.dictionary_id, queryWord, [hit.id], settings.theme)
     // 复用主界面的 entry-frame：同一个文档只挂在一个 iframe 上，切组时销毁重建
     const key = hitKey(hit)
     let frame = frames.get(key)
     if (!frame) {
       frame = createEntryFrame({
         baseUrl: () => settings.server_url,
+        theme: () => settings.theme,
         onHeight: (height) => {
           // 高度链路诊断：词条「高度超低」问题时看这里——子页报了多少、最终设了多少
           console.error(`[height] key=${hitKey(hit)} 报=${height}`)
@@ -373,10 +374,12 @@ void listen('mydict:shown', () => {
 // 托盘菜单里的「设置…」（Rust 侧 emit 到 popup；此前没人接，托盘点设置只显示面板不弹窗）
 void listen('mydict:open-settings', () => modal.open())
 
-// 主界面（或本窗）保存设置后同步：主题立即切换，不再「主界面暗色、面板亮色」
+// 主界面（或本窗）保存设置后同步：主题立即切换，不再「主界面暗色、面板亮色」；
+// 已挂载的词条文档也同步换明暗
 void listen<Settings>('mydict:settings-updated', (event) => {
   settings = event.payload
   applyTheme(settings.theme)
+  for (const [, frame] of frames) frame.refreshTheme()
 })
 
 void listen<string>('mydict:word', (event) => {

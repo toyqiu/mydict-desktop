@@ -253,7 +253,7 @@ async function selectHit(index: number) {
   activeIndex = index
   renderHits()
   try {
-    const html = await api.entryHtml(hit.dictionary_id, queryWord, [hit.id])
+    const html = await api.entryHtml(hit.dictionary_id, queryWord, [hit.id], settings.theme)
     entryFrame?.load(html)
     // 换词条必须把词条区滚回顶部：容器是 overflow:auto，长词条滚下去之后再看一条短词条，
     // 视口会停在短词条下方——整块看起来是空的（用户报的「点开词条看不到任何内容」）。
@@ -350,6 +350,8 @@ void listen('mydict:open-settings', () => openSettings())
 void listen<Settings>('mydict:settings-updated', (event) => {
   settings = event.payload
   applyTheme(settings.theme)
+  // 已挂载的词条文档同步换明暗（iframe 保留着播放位置，不能重建）
+  entryFrame?.refreshTheme()
   if (settings.hotkey) {
     hotkeyChip.textContent = settings.hotkey
     hotkeyChip.hidden = false
@@ -361,6 +363,7 @@ settingsHost.appendChild(settingsModal.element)
 
 entryFrame = createEntryFrame({
   baseUrl: () => settings.server_url,
+  theme: () => settings.theme,
   onHeight: (height) => {
     if (entryFrame && height > 0) entryFrame.element.style.height = `${height}px`
   },

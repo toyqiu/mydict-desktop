@@ -26,6 +26,12 @@ export interface EntryFrameOptions {
    * 允许传函数：设置页改完地址后不必重建 frame，下一次渲染就用新地址。
    */
   baseUrl: string | (() => string)
+  /**
+   * 当前主题（dark|light），允许传函数。词条文档按它渲染明暗：
+   * ready 时补发一次（文档没带主题初值时会跟随系统偏好，桌面端系统偏好=亮色，
+   * 应用是暗色时词条就一直是亮色——实测正是「暗色模式下词条不变暗」的原因）。
+   */
+  theme: string | (() => string)
   onHeight?: (height: number) => void
   onEntry?: (word: string, anchor: string) => void
   onExternal?: (url: string) => void
@@ -37,6 +43,8 @@ export interface EntryFrame {
   element: HTMLIFrameElement
   load: (html: string) => void
   destroy: () => void
+  /** 主题变化时调用：给词条文档补发 mydict:cmd/theme */
+  refreshTheme: () => void
 }
 
 /**
@@ -58,11 +66,29 @@ export function createEntryFrame(options: EntryFrameOptions): EntryFrame {
   frame.setAttribute('title', '词条')
   frame.srcdoc = '<!doctype html><html><body></body></html>'
 
+  const currentTheme = (): string =>
+    (typeof options.theme === 'function' ? options.theme() : options.theme) || 'dark'
+
+  const postTheme = () => {
+    try {
+      frame.contentWindow?.postMessage(
+        { type: 'mydict:cmd', cmd: 'theme', theme: currentTheme() },
+        '*',
+      )
+    } catch {
+      /* 父页/子页销毁时静默 */
+    }
+  }
+
   const onMessage = (event: MessageEvent) => {
     if (event.source !== frame.contentWindow) return
     const data = event.data as { type?: string } & Record<string, unknown>
     if (!data || typeof data.type !== 'string') return
     switch (data.type) {
+      case 'mydict:ready':
+        // 子页监听已装好，这是下发主题最可靠的时机（对齐网页版 EntryFrame.postTheme）
+        postTheme()
+        break
       case 'mydict:height':
         options.onHeight?.(Number(data.height) || 0)
         break
@@ -110,6 +136,7 @@ export function createEntryFrame(options: EntryFrameOptions): EntryFrame {
       window.removeEventListener('message', onMessage)
       frame.remove()
     },
+    refreshTheme: postTheme,
   }
 }
 

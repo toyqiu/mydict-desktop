@@ -430,6 +430,7 @@ impl AppState {
         dictionary_id: i64,
         word: &str,
         entry_ids: &[i64],
+        theme: Option<&str>,
     ) -> Result<String, String> {
         let ids = entry_ids
             .iter()
@@ -442,6 +443,10 @@ impl AppState {
         );
         if !ids.is_empty() {
             path.push_str(&format!("&entry_ids={ids}"));
+        }
+        // 主题写进文档：iframe 首屏就是正确的明暗，不必等父页的 mydict:cmd
+        if let Some(theme) = theme {
+            path.push_str(&format!("&theme={}", urlencode(theme)));
         }
         let response = self.get_authed(&path).await?;
         let status = response.status();

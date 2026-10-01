@@ -28,7 +28,7 @@
   --danger: #ff6b6b;
   --warn: #e0a63c;
 
-  /* 词条区固定亮色：词典自带的样式是按亮色设计的，跟着外壳变暗会花 */
+  /* 词条区默认亮色（亮色主题用） */
   --entry-bg: #ffffff;
   --entry-fg: #1b1d21;
 }
@@ -51,6 +51,11 @@
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.55);
   --mask: rgba(8, 10, 16, 0.55);
+  /* 词条区跟随暗色：服务端的词条文档带整套暗色覆盖（提亮文字、去白底、正文透明，
+     由 theme 参数/父页 mydict:cmd 激活），容器底色必须一起变——否则切到暗色样式后，
+     近白的词条文字落在白底上根本看不见。亮色主题不受影响。 */
+  --entry-bg: #26282f;
+  --entry-fg: #eaf1ee;
   color-scheme: dark;
 }
 
