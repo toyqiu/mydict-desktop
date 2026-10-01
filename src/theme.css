@@ -213,3 +213,59 @@
 .modal-foot .status-inline.error {
   color: var(--danger);
 }
+
+/* ---------- 行为开关：一行显示 ----------
+ * 上面的 `.field-group label > span { flex: 0 0 76px }` 是给「地址/用户名」这类字段标签的，
+ * 它同样命中开关里的说明文字——文字被压进 76px 后折行溢出（实测「失焦自动收起（快捷搜索窗）」
+ * 折成两行还被裁掉）。这里整体覆盖成一行布局，顺手把裸复选框换成胶囊开关。 */
+.field-group label.switch {
+  cursor: pointer;
+}
+
+.field-group label.switch > span {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.field-group .switch input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  position: relative;
+  cursor: pointer;
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.field-group .switch input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition:
+    transform var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+
+.field-group .switch input[type='checkbox']:checked {
+  background: var(--accent-grad);
+  border-color: transparent;
+}
+
+.field-group .switch input[type='checkbox']:checked::after {
+  transform: translateX(16px);
+  background: #fff;
+}

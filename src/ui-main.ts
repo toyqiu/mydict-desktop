@@ -171,6 +171,21 @@ async function loadTabs(): Promise<void> {
 
 function renderTabs(): void {
   const chips = [{ lang: '', label: '全部', dictIds: [] as number[] }, ...langTabs]
+  const existing = [...langsRow.children] as HTMLElement[]
+  const sameSet =
+    existing.length === chips.length &&
+    existing.every((el, index) => el.dataset.lang === chips[index].lang)
+  if (sameSet) {
+    // 集合没变就只切高亮：重建 innerHTML 会让 .langs 短暂变成 :empty（popup.css 把它
+    // display:none），整行消失一帧、下方内容上下跳动——这就是切换标签时的闪动。
+    existing.forEach((el, index) => {
+      const tab = chips[index]
+      el.classList.toggle('active', tab.lang === activeScope)
+      const count = el.querySelector('.count')
+      if (count) count.textContent = tab.dictIds.length ? String(tab.dictIds.length) : ''
+    })
+    return
+  }
   langsRow.innerHTML = chips
     .map(
       (tab) => `
