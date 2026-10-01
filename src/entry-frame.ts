@@ -154,8 +154,9 @@ export function createEntryFrame(options: EntryFrameOptions): EntryFrame {
     element: frame,
     load(html: string) {
       const base = resolveBase()
+      const withHardening = withViewerCrashMitigation(html)
       // 服务器地址还没配好时不做任何注入：至少不留下一个指向 tauri:// 的半成品
-      frame.srcdoc = base ? withBase(html, base) : html
+      frame.srcdoc = base ? withBase(withHardening, base) : withHardening
     },
     destroy() {
       window.removeEventListener('message', onMessage)
@@ -163,6 +164,25 @@ export function createEntryFrame(options: EntryFrameOptions): EntryFrame {
     },
     refreshTheme: postTheme,
   }
+}
+
+/**
+ * WebKitGTK 崩溃缓解：牛津高阶的悬停放大镜角标（`.ox-enlarge-label`，SVG data-URI
+ * 背景）在软件渲染下被真实鼠标悬停/点击命中时，会崩掉整个 WebKitGTK 进程——
+ * 表现为「应用静默消失」。零 JS 的纯静态文档也能复现，纯引擎层 bug，宿主侧只能
+ * 把这个浮层的绘制关掉。桌面端的放大查看走全屏查看器窗口，角标没有存在价值。
+ */
+const VIEWER_CRASH_MITIGATION =
+  '<style>.ox-enlarge-label{display:none!important;background-image:none!important}</style>'
+
+export function withViewerCrashMitigation(html: string): string {
+  if (html.includes('ox-enlarge-label') === false) return html // 没有这个元素就不必注入
+  const headOpen = html.match(/<head[^>]*>/i)
+  if (headOpen?.index !== undefined) {
+    const at = headOpen.index + headOpen[0].length
+    return html.slice(0, at) + VIEWER_CRASH_MITIGATION + html.slice(at)
+  }
+  return html
 }
 
 /** 把 `<base>` 插到 `<head>` 之后；文档没有 head 时补一个最小骨架 */
