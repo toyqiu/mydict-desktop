@@ -312,6 +312,10 @@ element('p-settings-host').appendChild(modal.element)
 const lightbox = mountImageLightbox()
 document.body.appendChild(lightbox.element)
 
+// 调试钩子：MYDICT_DEBUG_EVAL 注入的脚本可以用它驱动灯箱（与 Rust 侧的
+// MYDICT_DEBUG_EVAL 一样属于诊断基建，不参与业务逻辑）
+;(window as unknown as Record<string, unknown>).__mydict = { lightbox }
+
 /* ---------------- 事件 ---------------- */
 
 element('p-form').addEventListener('submit', (event) => {
