@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event'
 import { api, type Hit, type Settings } from './api'
 import { createEntryFrame, type EntryFrame } from './entry-frame'
 import { mountSettingsModal } from './settings-modal'
+import { mountImageLightbox } from './image-lightbox'
 import { langGroupLabel, langGroupOf } from './langs'
 import './theme.css'
 import './styles.css'
@@ -367,6 +368,9 @@ void listen<Settings>('mydict:settings-updated', (event) => {
 // 模态必须挂进 DOM：此前只创建未 append，主窗口的 ⚙/「打开设置」点了没有任何反应
 settingsHost.appendChild(settingsModal.element)
 
+const lightbox = mountImageLightbox()
+document.body.appendChild(lightbox.element)
+
 entryFrame = createEntryFrame({
   baseUrl: () => settings.server_url,
   theme: () => settings.theme,
@@ -382,6 +386,7 @@ entryFrame = createEntryFrame({
   },
   onEscape: () => void api.hideWindow(),
   onAudioUnsupported: () => setStatus('这条发音放不了（词典里的音频格式或文件缺失）', 'error'),
+  onImage: (payload) => lightbox.show(payload),
 })
 entryHost.appendChild(entryFrame.element)
 

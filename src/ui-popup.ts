@@ -12,6 +12,7 @@ import { listen } from '@tauri-apps/api/event'
 import { api, type Hit, type Settings } from './api'
 import { createEntryFrame, type EntryFrame } from './entry-frame'
 import { mountSettingsModal } from './settings-modal'
+import { mountImageLightbox } from './image-lightbox'
 import './theme.css'
 import './popup.css'
 
@@ -199,6 +200,7 @@ async function loadEntry(hit: Hit): Promise<void> {
         },
         onEscape: () => void api.hideWindow(),
         onAudioUnsupported: () => setStatus('这条发音放不了（词典里的音频格式或文件缺失）', 'error'),
+        onImage: (payload) => lightbox.show(payload),
       })
       frames.set(key, frame)
     }
@@ -306,6 +308,9 @@ const modal = mountSettingsModal({
   onClosed: () => wordInput.focus(),
 })
 element('p-settings-host').appendChild(modal.element)
+
+const lightbox = mountImageLightbox()
+document.body.appendChild(lightbox.element)
 
 /* ---------------- 事件 ---------------- */
 

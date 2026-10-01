@@ -32,6 +32,11 @@ export interface EntryFrameOptions {
    * 应用是暗色时词条就一直是亮色——实测正是「暗色模式下词条不变暗」的原因）。
    */
   theme: string | (() => string)
+  /**
+   * 词条里点了大图（≥160px、不在链接里的 <img>）：服务端引导脚本会带上该词典全部
+   * 大图的 urls 与点中下标——扫描版词典（辞海）的整页图靠这个放大查看。
+   */
+  onImage?: (payload: { src: string; alt: string; urls: string[]; index: number }) => void
   onHeight?: (height: number) => void
   onEntry?: (word: string, anchor: string) => void
   onExternal?: (url: string) => void
@@ -85,6 +90,25 @@ export function createEntryFrame(options: EntryFrameOptions): EntryFrame {
     const data = event.data as { type?: string } & Record<string, unknown>
     if (!data || typeof data.type !== 'string') return
     switch (data.type) {
+      case 'mydict:image': {
+        // 解析口径与网页版 EntryFrame 一致：urls 缺失/坏数据时退化成单张
+        const src = typeof data.src === 'string' && data.src ? data.src : ''
+        if (!src) break
+        const urls = Array.isArray(data.urls)
+          ? data.urls.filter((item): item is string => typeof item === 'string' && !!item)
+          : [src]
+        const index = Number(data.index)
+        options.onImage?.({
+          src,
+          alt: typeof data.alt === 'string' ? data.alt : '',
+          urls: urls.length ? urls : [src],
+          index:
+            Number.isInteger(index) && index >= 0 && index < urls.length
+              ? index
+              : Math.max(0, urls.indexOf(src)),
+        })
+        break
+      }
       case 'mydict:ready':
         // 子页监听已装好，这是下发主题最可靠的时机（对齐网页版 EntryFrame.postTheme）
         postTheme()
