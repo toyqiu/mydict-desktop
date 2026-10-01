@@ -357,6 +357,19 @@ document.addEventListener('keydown', (event) => {
   }
   // ↑/↓ 切换展开的词典（对齐网页版 ←/→ 的 moveExpanded）。单行输入框里这两个键
   // 没有原生用途，聚焦时也接管； 原查询词不丢。
+  // ←/→ 切换语言标签（检索范围）：与网页版「点标签=勾选该语言全部词典」一致，
+  // 切换后用当前词重查。单行输入框里这两个键只剩移动光标一个用途，编辑靠全选+输入即可。
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    if (langTabs.length === 0) return
+    event.preventDefault()
+    const ordered = [{ lang: '', label: '全部' }, ...langTabs]
+    const at = ordered.findIndex((t) => t.lang === activeScope)
+    const delta = event.key === 'ArrowRight' ? 1 : -1
+    activeScope = ordered[(((at + delta) % ordered.length) + ordered.length) % ordered.length].lang
+    renderTabs()
+    if (queryWord) void runSearch(queryWord)
+    return
+  }
   if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
     const items = hits
     if (items.length === 0) return

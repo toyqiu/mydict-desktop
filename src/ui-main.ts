@@ -335,6 +335,18 @@ document.addEventListener('keydown', (event) => {
     else void api.hideWindow()
     return
   }
+  // ←/→ 切换语言标签（检索范围），切换后用当前词重查
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    if (langTabs.length === 0) return
+    event.preventDefault()
+    const ordered = [{ lang: '', label: '全部' }, ...langTabs]
+    const at = ordered.findIndex((t) => t.lang === activeScope)
+    const delta = event.key === 'ArrowRight' ? 1 : -1
+    activeScope = ordered[(((at + delta) % ordered.length) + ordered.length) % ordered.length].lang
+    renderTabs()
+    if (queryWord) void runSearch(queryWord)
+    return
+  }
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
     const items = hits
     if (items.length === 0) return

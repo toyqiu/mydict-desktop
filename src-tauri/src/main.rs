@@ -407,9 +407,6 @@ fn toggle_window(app: &tauri::AppHandle) {
     } else {
         String::new()
     };
-    // 划词模式下要把焦点还给用户原来的窗口：X11 的 WM 在 map 新窗口时会自动聚焦，
-    // 光是不调 set_focus() 不够——得记住原活动窗口、呼出后再还回去。
-    let previous_active = if selected.is_empty() { None } else { active_window_id() };
     let _ = window.show();
     // 用户拖过/缩放过就恢复上一次的几何；先 show 再定位（未映射窗口上定位会让
     // WebKitGTK 的输入区域失效）。从未动过才贴光标居中。
@@ -426,30 +423,19 @@ fn toggle_window(app: &tauri::AppHandle) {
         if selected.is_empty() { "普通模式" } else { "划词模式" }
     );
 
-    if selected.is_empty() {
-        // 普通呼出：抢焦点（前端收到 focused=true 后会把光标放进输入框）。
-        // XFCE 的「防焦点窃取」可能把刚拿到的焦点又还给上一个窗口，所以补一次——
-        // 不然前端会看到「刚聚焦就失焦」，把它当成用户离开而立刻收起。
-        let _ = window.set_focus();
-        let focus_window = window.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(200));
-            let _ = focus_window.set_focus();
-        });
-        let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
-    } else {
-        // 划词：只展示不抢焦点。前端收到 focused=false 就不会武装「失焦收起」，
-        // 也不会去动输入框焦点。
-        if let Some(id) = previous_active.clone() {
-            hand_focus_back(&id);
-            // WM 的 map/聚焦是异步的：立刻还一次之后再补一次，确保最终焦点落在用户原来的窗口上
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_millis(160));
-                hand_focus_back(&id);
-            });
-        }
+    // 两种模式都聚焦输入框（前端收到 shown 后 focus+select）：用户要的是「呼出即可编辑」。
+    // 曾经划词模式把焦点还给原窗口，结果 PRIMARY 里有陈旧选区时每次呼出都走划词、
+    // 永远无法聚焦输入框（用户实测「激活快速面板没有聚焦搜索框」）。
+    // XFCE 的「防焦点窃取」可能把刚拿到的焦点又还给上一个窗口，所以补一次。
+    let _ = window.set_focus();
+    let focus_window = window.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let _ = focus_window.set_focus();
+    });
+    let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
+    if !selected.is_empty() {
         let _ = app.emit_to("popup", "mydict:word", selected);
-        let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: false });
     }
 }
 
@@ -475,19 +461,6 @@ fn active_window_id() -> Option<String> {
 fn active_window_id() -> Option<String> {
     None
 }
-
-/// 把键盘焦点还给指定窗口（`windowfocus` 只改焦点、不抬升窗口，我们的悬浮层仍在最上）
-#[cfg(all(unix, not(target_os = "macos")))]
-fn hand_focus_back(window_id: &str) {
-    // 不带 --sync：同步等待 WM 完成焦点转移可能阻塞调用线程；焦点最终归属由 WM 决定，
-    // 我们只表达意图
-    let _ = std::process::Command::new("xdotool")
-        .args(["windowfocus", window_id])
-        .output();
-}
-
-#[cfg(not(all(unix, not(target_os = "macos"))))]
-fn hand_focus_back(_window_id: &str) {}
 
 /// 打开词典主界面（重型浏览窗口）；若快捷搜索窗开着，让它让位
 fn show_main(app: &tauri::AppHandle) {
