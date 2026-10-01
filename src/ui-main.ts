@@ -4,7 +4,6 @@ import { invoke } from '@tauri-apps/api/core'
 import { api, type Hit, type Settings } from './api'
 import { createEntryFrame, type EntryFrame } from './entry-frame'
 import { mountSettingsModal } from './settings-modal'
-import { mountImageLightbox } from './image-lightbox'
 import { langGroupLabel, langGroupOf } from './langs'
 import './theme.css'
 import './styles.css'
@@ -476,18 +475,17 @@ void listen<Settings>('mydict:settings-updated', (event) => {
 // 模态必须挂进 DOM：此前只创建未 append，主窗口的 ⚙/「打开设置」点了没有任何反应
 settingsHost.appendChild(settingsModal.element)
 
-const lightbox = mountImageLightbox({
-  // 铺满显示器：查看器开着时窗口本身进全屏，关闭时还原（Rust 侧跳过这期间的几何落盘）
-  onOpenChange: (open) => {
-    void invoke('set_viewer_fullscreen', { on: open }).catch(() => undefined)
-  },
-  fullscreen: true,
-})
-document.body.appendChild(lightbox.element)
-
 // 调试钩子：MYDICT_DEBUG_EVAL 注入的脚本可以用它驱动灯箱（与 Rust 侧的
 // MYDICT_DEBUG_EVAL 一样属于诊断基建，不参与业务逻辑）
-;(window as unknown as Record<string, unknown>).__mydict = { lightbox }
+;(window as unknown as Record<string, unknown>).__mydict = {
+  // 点图 → 独立的查看器窗口（铺满显示器，词典窗口不动）
+  openViewer: (payload: {
+    src: string
+    alt?: string
+    urls: string[]
+    index: number
+  }) => invoke('open_viewer', payload).catch(() => undefined),
+}
 
 entryFrame = createEntryFrame({
   baseUrl: () => settings.server_url,
@@ -504,7 +502,9 @@ entryFrame = createEntryFrame({
   },
   onEscape: () => void api.hideWindow(),
   onAudioUnsupported: () => setStatus('这条发音放不了（词典里的音频格式或文件缺失）', 'error'),
-  onImage: (payload) => lightbox.show(payload),
+  onImage: (payload) => {
+    void invoke('open_viewer', payload).catch(() => undefined)
+  },
 })
 entryHost.appendChild(entryFrame.element)
 

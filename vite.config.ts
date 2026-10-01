@@ -14,10 +14,11 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       // 多页输入：main 窗口用 index.html，popup 窗口用 popup.html——两个窗口各自的
-      // js/css 打进各自的 chunk，谁也不会拿错样式
+      // js/css 打进各自的 chunk，谁也不会拿错样式。viewer 是全屏图片查看器窗口。
       input: {
         main: 'index.html',
         popup: 'popup.html',
+        viewer: 'viewer.html',
       },
     },
   },

@@ -108,10 +108,6 @@ fn main() {
             if !matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)) {
                 return;
             }
-            // 灯箱全屏的过渡事件不是用户的窗口摆放，记住它会把全屏尺寸写进 config.json
-            if window.state::<AppState>().is_viewer_fullscreen() {
-                return;
-            }
             let (Ok(position), Ok(size)) = (window.outer_position(), window.outer_size()) else {
                 return;
             };
@@ -147,7 +143,9 @@ fn main() {
             focus_probe,
             hotkey_error,
             open_external,
-            set_viewer_fullscreen,
+            open_viewer,
+            take_viewer_payload,
+            close_viewer,
         ])
         .run(tauri::generate_context!())
         .expect("应用启动失败");
@@ -717,51 +715,77 @@ fn note(tag: String) {
     eprintln!("[front] {tag}");
 }
 
-/// 词条图片查看器的全屏开关：查看器打开时把所在窗口铺满整个显示器（而不是只盖住
-/// 应用窗口），关闭时还原原几何。
+/// 词条图片查看器：新建一个**独立窗口**（无边框、置顶、铺满词条所在显示器），
+/// 词典窗口保持原样——全屏看图不该顺带改词典窗口的几何。
 ///
-/// 不用 `set_fullscreen`：本机 xfwm4/xrdp 对这种无边框透明窗口跑 WM 全屏会把窗口
-/// 直接弄丢（实测设置成功但窗口再也不映射，应用还活着）。所以手动做——记住原几何、
-/// 定位到显示器原点、尺寸拉到显示器大小，这三个动作与 --show 恢复几何走的是同一条
-/// 已验证可用的路径。
-///
-/// 先记账再动窗口：铺屏/还原引发的 Moved/Resized 不是用户的窗口摆放，几何落盘逻辑
-/// 靠 viewer_fullscreen 标志跳过它们（见 on_window_event）。
+/// 图片载荷走两条路：窗口新建时页面加载完调 take_viewer_payload 取暂存的初始载荷
+/// （emit 可能早于页面监听装好，靠暂存避免竞态）；窗口已开着又点了别的图，直接
+/// emit mydict:viewer-image 让它换图。
 #[tauri::command]
-fn set_viewer_fullscreen(app: tauri::AppHandle, window: tauri::WebviewWindow, on: bool) {
-    let state = app.state::<AppState>();
-    if on {
-        let (Ok(position), Ok(size)) = (window.outer_position(), window.outer_size()) else {
-            eprintln!("[lightbox] 进全屏失败：拿不到当前窗口几何");
-            return;
-        };
-        let monitor = window.current_monitor().ok().flatten().or_else(|| window.primary_monitor().ok().flatten());
-        let Some(monitor) = monitor else {
-            eprintln!("[lightbox] 进全屏失败：拿不到显示器信息");
-            return;
-        };
-        state.stage_viewer_restore((position.x, position.y, size.width, size.height));
-        state.set_viewer_fullscreen(true);
-        let origin = monitor.position();
-        let bounds = monitor.size();
-        let _ = window.set_size(tauri::PhysicalSize::new(bounds.width, bounds.height));
-        let _ = window.set_position(tauri::PhysicalPosition::new(origin.x, origin.y));
-        eprintln!(
-            "[lightbox] fullscreen=on window={} monitor={}x{}@{},{}",
-            window.label(),
-            bounds.width,
-            bounds.height,
-            origin.x,
-            origin.y
-        );
+fn open_viewer(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    src: String,
+    alt: String,
+    urls: Vec<String>,
+    index: usize,
+) {
+    let payload = mydict::ViewerPayload { src, alt, urls, index };
+    if let Some(viewer) = app.get_webview_window("viewer") {
+        let _ = viewer.set_focus();
+        let _ = app.emit_to("viewer", "mydict:viewer-image", payload);
+        return;
+    }
+    let monitor = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten());
+    let Some(monitor) = monitor else {
+        eprintln!("[viewer] 创建查看器失败：拿不到显示器信息");
+        return;
+    };
+    let origin = monitor.position();
+    let bounds = monitor.size();
+    let scale = monitor.scale_factor();
+    app.state::<AppState>().stage_viewer_payload(payload);
+    // builder 的 position/inner_size 都是逻辑单位，显示器几何是物理像素
+    let result = tauri::WebviewWindowBuilder::new(
+        &app,
+        "viewer",
+        tauri::WebviewUrl::App("viewer.html".into()),
+    )
+    .title("图片查看器")
+    .decorations(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .resizable(false)
+    .position(origin.x as f64 / scale, origin.y as f64 / scale)
+    .inner_size(bounds.width as f64 / scale, bounds.height as f64 / scale)
+    .build();
+    if let Err(err) = result {
+        eprintln!("[viewer] 创建查看器窗口失败：{err}");
+        // 别留下一个永远没人取的暂存载荷
+        app.state::<AppState>().take_viewer_payload();
     } else {
-        if let Some((x, y, width, height)) = state.take_viewer_restore() {
-            let _ = window.set_size(tauri::PhysicalSize::new(width, height));
-            let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
-        }
-        // 还原事件随后异步到达，此时标志已清，它们的几何与原来相同，落盘无害
-        state.set_viewer_fullscreen(false);
-        eprintln!("[lightbox] fullscreen=off window={}", window.label());
+        eprintln!(
+            "[viewer] 打开 viewer {}x{}@{},{}",
+            bounds.width, bounds.height, origin.x, origin.y
+        );
+    }
+}
+
+/// 查看器页面就绪后取初始图片载荷（取走即清）
+#[tauri::command]
+fn take_viewer_payload(app: tauri::AppHandle) -> Option<mydict::ViewerPayload> {
+    app.state::<AppState>().take_viewer_payload()
+}
+
+/// 查看器里退出了（Esc/点空白），销毁窗口。popup/main 还在，应用不会跟着退出。
+#[tauri::command]
+fn close_viewer(app: tauri::AppHandle) {
+    if let Some(viewer) = app.get_webview_window("viewer") {
+        let _ = viewer.close();
     }
 }
 

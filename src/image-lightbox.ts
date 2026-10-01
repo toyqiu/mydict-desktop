@@ -17,12 +17,9 @@ export interface LightboxPayload {
 
 export interface LightboxMountOptions {
   /**
-   * 查看器开/关时回调（true=打开）。宿主用它把窗口铺满显示器：灯箱的遮罩是 fixed 铺满
-   * **视口**，视口就是应用窗口——要铺满整个显示器只能把窗口本身拉到显示器大小。
+   * 查看器开/关时回调（true=打开）。宿主用它销毁/复用查看器窗口等。
    */
   onOpenChange?: (open: boolean) => void
-  /** 窗口会铺满屏幕时传 true：遮罩的四角圆角会露出桌面，铺屏状态下要去掉。 */
-  fullscreen?: boolean
 }
 
 export interface ImageLightbox {
@@ -70,6 +67,8 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
   let offsetStartY = 0
   let open = false
   let previousBodyOverflow = ''
+  // 用户手动缩放/拖动过就不再自动重新适配——自动重排别覆盖用户的观察位置
+  let userAdjusted = false
 
   const hasSiblings = (): boolean => images.length > 1
 
@@ -98,6 +97,7 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
   /** 缩放时锚定光标：保持光标下方那个图片坐标点不动，放大时目标才不会跑出视口 */
   function onWheel(event: WheelEvent): void {
     event.preventDefault()
+    userAdjusted = true
     const rect = overlay.getBoundingClientRect()
     const pointerX = event.clientX - rect.left
     const pointerY = event.clientY - rect.top
@@ -127,6 +127,7 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
     const dx = event.clientX - pointerStartX
     const dy = event.clientY - pointerStartY
     moved = Math.max(moved, Math.abs(dx) + Math.abs(dy))
+    if (moved > DRAG_THRESHOLD) userAdjusted = true
     offsetX = offsetStartX + dx
     offsetY = offsetStartY + dy
     applyTransform()
@@ -207,9 +208,24 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
   // 捕获阶段挡住应用全局快捷键（见 onKeydown 的说明）
   window.addEventListener('keydown', onKeydown, true)
 
+  // 视口尺寸变了（窗口创建后到位、显示器切换等）：图片加载那一刻的视口不一定
+  // 是最终视口，不重算的话「适应视口」就是按旧尺寸算的——图片既不居中也不够大。
+  function refitIfUntouched(): void {
+    if (!open || userAdjusted) return
+    // 图还没解码完时 naturalWidth 是 0，fitToViewport 会按 1×1 算出离谱的缩放；
+    // 加载完 load 事件自己会适配
+    if (!img.complete || !img.naturalWidth) return
+    fitToViewport()
+  }
+  window.addEventListener('resize', refitIfUntouched)
+  // 窗口里没有别的布局源，ResizeObserver 兜住 window resize 覆盖不到的场景（如缩放后
+  // 才挂载到 DOM）
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(refitIfUntouched).observe(document.documentElement)
+  }
+
   function close(): void {
     overlay.hidden = true
-    overlay.classList.remove('lightbox-full')
     open = false
     document.body.style.overflow = previousBodyOverflow
     options.onOpenChange?.(false)
@@ -221,8 +237,8 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
       images = payload.urls.length ? payload.urls : [payload.src]
       altText = payload.alt ?? ''
       overlay.hidden = false
-      overlay.classList.toggle('lightbox-full', !!options.fullscreen)
       open = true
+      userAdjusted = false
       previousBodyOverflow = document.body.style.overflow
       document.body.style.overflow = 'hidden'
       options.onOpenChange?.(true)
