@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event'
 import { api, type Hit, type Settings } from './api'
 import { createEntryFrame, type EntryFrame } from './entry-frame'
 import { mountSettingsModal } from './settings-modal'
+import { langGroupLabel, langGroupOf } from './langs'
 import './theme.css'
 import './styles.css'
 
@@ -47,6 +48,8 @@ app.innerHTML = `
 
     <div class="status" id="status" hidden></div>
 
+    <nav class="langs" id="langs" hidden></nav>
+
     <main class="results" id="results" hidden>
       <ul class="hits" id="hits"></ul>
       <section class="entry" id="entry"></section>
@@ -60,6 +63,8 @@ app.innerHTML = `
       </span>
       <button class="primary" id="empty-cta" type="button">打开设置</button>
     </div>
+
+    <div id="settings-host"></div>
   </div>
 `
 
@@ -70,6 +75,11 @@ const statusBox = element('status')
 const emptyBox = element('empty')
 const resultsPane = element('results')
 const hotkeyChip = element('hotkey-chip')
+const langsRow = element<HTMLDivElement>('langs')
+const settingsHost = element('settings-host')
+
+/** 当前语言组里的命中（标签行切换的就是这个组） */
+const visibleHits = (): Hit[] => groups.find((g) => g.lang === activeLang)?.items ?? []
 
 let settings: Settings = {
   server_url: '',
@@ -84,6 +94,10 @@ let hits: Hit[] = []
 let activeIndex = -1
 let queryWord = ''
 let entryFrame: EntryFrame | null = null
+// 命中按词典源语言分组（语义对齐网页版：zh/zh-Hans/zh-Hant 都归「中文」），
+// 标签行点选切换，命中列表只显示当前组
+let groups: { lang: string; label: string; items: Hit[] }[] = []
+let activeLang = ''
 
 function applyTheme(theme: string) {
   document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark'
@@ -135,8 +149,42 @@ function setEmptyContent(title: string, sub: string, cta: string | null) {
   button.hidden = cta === null
 }
 
+function regroup(): void {
+  const byLang = new Map<string, Hit[]>()
+  for (const hit of hits) {
+    const lang = langGroupOf(hit.lang_from)
+    const list = byLang.get(lang) ?? []
+    list.push(hit)
+    byLang.set(lang, list)
+  }
+  // 排序：与输入语言一致的组在前，其后按命中数降序
+  groups = [...byLang.entries()]
+    .map(([lang, items]) => ({ lang, label: langGroupLabel(lang), items }))
+    .sort((a, b) => {
+      const aMatch = a.items.some((item) => item.lang_match !== false) ? 0 : 1
+      const bMatch = b.items.some((item) => item.lang_match !== false) ? 0 : 1
+      return aMatch - bMatch || b.items.length - a.items.length
+    })
+  if (!groups.some((g) => g.lang === activeLang)) {
+    activeLang = groups[0]?.lang ?? ''
+  }
+}
+
+function renderLangs(): void {
+  langsRow.innerHTML = groups
+    .map(
+      (group) => `
+      <button class="lang-chip ${group.lang === activeLang ? 'active' : ''}" data-lang="${group.lang}">
+        ${group.label}<span class="count">${group.items.length}</span>
+      </button>`,
+    )
+    .join('')
+  langsRow.hidden = groups.length === 0
+}
+
 function renderHits() {
-  hitsList.innerHTML = hits
+  const items = visibleHits()
+  hitsList.innerHTML = items
     .map(
       (hit, index) => `
       <li class="hit ${index === activeIndex ? 'active' : ''}" data-index="${index}">
@@ -158,6 +206,8 @@ async function runSearch(next: string) {
     hits = await api.search(trimmed)
     if (hits.length === 0) {
       activeIndex = -1
+      groups = []
+      renderLangs()
       hitsList.innerHTML = ''
       entryHost.innerHTML = ''
       showEmpty(true)
@@ -169,6 +219,8 @@ async function runSearch(next: string) {
     setStatus('')
     activeIndex = 0
     entryHost.scrollTop = 0
+    regroup()
+    renderLangs()
     renderHits()
     await selectHit(0)
   } catch (error) {
@@ -181,7 +233,7 @@ async function runSearch(next: string) {
 }
 
 async function selectHit(index: number) {
-  const hit = hits[index]
+  const hit = visibleHits()[index]
   if (!hit) return
   activeIndex = index
   renderHits()
@@ -232,6 +284,17 @@ element('search-form').addEventListener('submit', (event) => {
   void runSearch(input.value)
 })
 
+langsRow.addEventListener('click', (event) => {
+  const chip = (event.target as HTMLElement).closest<HTMLButtonElement>('button.lang-chip')
+  if (!chip) return
+  activeLang = chip.dataset.lang ?? activeLang
+  activeIndex = 0
+  renderLangs()
+  renderHits()
+  entryHost.scrollTop = 0
+  void selectHit(0)
+})
+
 hitsList.addEventListener('click', (event) => {
   const li = (event.target as HTMLElement).closest<HTMLLIElement>('li.hit')
   if (!li) return
@@ -250,19 +313,25 @@ element('btn-theme').addEventListener('click', async () => {
 // 键盘：Esc 收起窗口（主界面没有弹窗要管）；↑/↓ 选命中
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
-    void api.hideWindow()
+    // 设置模态开着时先关模态，别把整个窗口收起来
+    if (settingsModal.isOpen()) settingsModal.close()
+    else void api.hideWindow()
     return
   }
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-    if (hits.length === 0) return
+    const items = visibleHits()
+    if (items.length === 0) return
     event.preventDefault()
     const delta = event.key === 'ArrowDown' ? 1 : -1
-    void selectHit((activeIndex + delta + hits.length) % hits.length)
+    void selectHit((activeIndex + delta + items.length) % items.length)
   }
 })
 
 // 托盘菜单里的「设置…」
 void listen('mydict:open-settings', () => openSettings())
+
+// 模态必须挂进 DOM：此前只创建未 append，主窗口的 ⚙/「打开设置」点了没有任何反应
+settingsHost.appendChild(settingsModal.element)
 
 entryFrame = createEntryFrame({
   baseUrl: () => settings.server_url,

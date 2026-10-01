@@ -33,20 +33,7 @@ window.addEventListener(
   true,
 )
 
-const LANG_LABELS: Record<string, string> = {
-  'zh-Hans': '简中',
-  'zh-Hant': '繁中',
-  zh: '中文',
-  ja: '日语',
-  en: '英语',
-  ko: '韩语',
-  fr: '法语',
-  de: '德语',
-  ru: '俄语',
-}
-
-const langLabel = (code: string | null | undefined): string =>
-  code ? (LANG_LABELS[code] ?? code) : '未知'
+import { langGroupLabel, langGroupOf } from './langs'
 
 const element = <T extends HTMLElement>(id: string): T => {
   const found = document.getElementById(id)
@@ -109,14 +96,14 @@ const applyTheme = (theme: string) => {
 function regroup(): void {
   const byLang = new Map<string, Hit[]>()
   for (const hit of hits) {
-    const lang = hit.lang_from ?? 'other'
+    const lang = langGroupOf(hit.lang_from)
     const list = byLang.get(lang) ?? []
     list.push(hit)
     byLang.set(lang, list)
   }
   // 排序：与输入语言一致的组在前，其后按命中数降序
   groups = [...byLang.entries()]
-    .map(([lang, items]) => ({ lang, label: langLabel(lang), items }))
+    .map(([lang, items]) => ({ lang, label: langGroupLabel(lang), items }))
     .sort((a, b) => {
       const aMatch = a.items.some((item) => item.lang_match !== false) ? 0 : 1
       const bMatch = b.items.some((item) => item.lang_match !== false) ? 0 : 1
@@ -369,6 +356,9 @@ void listen('mydict:shown', () => {
   wordInput.focus()
   wordInput.select()
 })
+
+// 托盘菜单里的「设置…」（Rust 侧 emit 到 popup；此前没人接，托盘点设置只显示面板不弹窗）
+void listen('mydict:open-settings', () => modal.open())
 
 void listen<string>('mydict:word', (event) => {
   if (typeof event.payload === 'string' && event.payload.trim()) {

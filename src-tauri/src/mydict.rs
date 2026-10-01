@@ -25,6 +25,11 @@ pub struct Hit {
     pub word: String,
     #[serde(default)]
     pub phonetic: Option<String>,
+    /// 命中词典的源语言（zh-Hans/ja/…）：前端用它做「按语种分组」的标签行。
+    /// 服务端一直返回这个字段，这里不声明的话 serde 会直接丢掉——实测弹窗的语言标签
+    /// 因此只剩一个「other」组。
+    #[serde(default)]
+    pub lang_from: Option<String>,
     /// 该词典的语言方向是否与输入一致；false 表示这是「优先语言没命中、退到其它语言」的结果
     #[serde(default)]
     pub lang_match: bool,

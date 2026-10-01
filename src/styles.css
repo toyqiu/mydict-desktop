@@ -386,3 +386,50 @@ body {
 .modal-foot .primary {
   padding: 9px 20px;
 }
+
+/* ---------- 语言分组标签（与弹窗的 .langs 同一套，位置在状态栏与结果区之间） ---------- */
+
+.langs {
+  display: flex;
+  gap: 6px;
+  padding: 0 14px 10px;
+  overflow-x: auto;
+}
+
+.langs[hidden] {
+  display: none;
+}
+
+.lang-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--dur) var(--ease),
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.lang-chip:hover {
+  background: var(--hover-bg);
+}
+
+.lang-chip.active {
+  background: var(--accent-grad);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(106, 140, 255, 0.28);
+}
+
+.lang-chip .count {
+  font-size: 0.62rem;
+  opacity: 0.75;
+}
