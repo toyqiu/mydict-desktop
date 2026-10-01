@@ -337,3 +337,78 @@ body {
 .acc-body .batch-nav {
   border-top: 1px solid var(--border-soft);
 }
+
+/* ---------- 词条图片查看器（幻灯片）----------
+ * 样式抄自网页版 components/ImageLightbox.vue（scoped 那段），令牌取的是它引用的
+ * 具体值（--color-overlay-* / --size-control-lg 等，见 frontend/src/styles/tokens/）。
+ * 没有这段样式时 overlay 是个流内块、被应用布局压住——表现就是「点图片毫无反应」。
+ * 窗口是 10px 圆角，遮罩 fixed 铺满视口后四角会露出底色，同样补圆角。 */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.86);
+  /* 扫描图上小字密集，放大后要尽量保持锐利 */
+  touch-action: none;
+  cursor: grab;
+  border-radius: 10px;
+}
+
+.lightbox:active {
+  cursor: grabbing;
+}
+
+.lightbox-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* 变换以左上角为基准，平移量才能按「图片左上角在视口里的位置」直接算 */
+  transform-origin: 0 0;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  /* 翻页按钮做成竖长条，贴着屏幕两侧更好点，不挡图片中部 */
+  height: 72px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #f2f5f4;
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lightbox-nav:hover {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.lightbox-nav-prev {
+  left: 16px;
+}
+
+.lightbox-nav-next {
+  right: 16px;
+}
+
+.lightbox-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #f2f5f4;
+  font-size: 13px;
+  pointer-events: none;
+  white-space: nowrap;
+}
