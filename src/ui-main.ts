@@ -78,9 +78,6 @@ const hotkeyChip = element('hotkey-chip')
 const langsRow = element<HTMLDivElement>('langs')
 const settingsHost = element('settings-host')
 
-/** 当前语言组里的命中（标签行切换的就是这个组） */
-const visibleHits = (): Hit[] => groups.find((g) => g.lang === activeLang)?.items ?? []
-
 let settings: Settings = {
   server_url: '',
   username: '',
@@ -96,8 +93,10 @@ let queryWord = ''
 let entryFrame: EntryFrame | null = null
 // 命中按词典源语言分组（语义对齐网页版：zh/zh-Hans/zh-Hant 都归「中文」），
 // 标签行点选切换，命中列表只显示当前组
-let groups: { lang: string; label: string; items: Hit[] }[] = []
-let activeLang = ''
+// 语言标签 = 检索范围选择器（对齐网页版）：数据源是**词典库**而不是命中结果，
+// 库里有哪几种语言就显示哪几项。scope 为空 = 全部（服务端按输入语言路由）。
+let langTabs: { lang: string; label: string; dictIds: number[] }[] = []
+let activeScope = ''
 
 function applyTheme(theme: string) {
   document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark'
@@ -149,41 +148,45 @@ function setEmptyContent(title: string, sub: string, cta: string | null) {
   button.hidden = cta === null
 }
 
-function regroup(): void {
-  const byLang = new Map<string, Hit[]>()
-  for (const hit of hits) {
-    const lang = langGroupOf(hit.lang_from)
-    const list = byLang.get(lang) ?? []
-    list.push(hit)
-    byLang.set(lang, list)
-  }
-  // 排序：与输入语言一致的组在前，其后按命中数降序
-  groups = [...byLang.entries()]
-    .map(([lang, items]) => ({ lang, label: langGroupLabel(lang), items }))
-    .sort((a, b) => {
-      const aMatch = a.items.some((item) => item.lang_match !== false) ? 0 : 1
-      const bMatch = b.items.some((item) => item.lang_match !== false) ? 0 : 1
-      return aMatch - bMatch || b.items.length - a.items.length
-    })
-  if (!groups.some((g) => g.lang === activeLang)) {
-    activeLang = groups[0]?.lang ?? ''
+async function loadTabs(): Promise<void> {
+  try {
+    const dicts = await api.dictionaries('usable')
+    const byLang = new Map<string, number[]>()
+    for (const d of dicts) {
+      const lang = langGroupOf(d.lang_from)
+      const ids = byLang.get(lang) ?? []
+      ids.push(d.id)
+      byLang.set(lang, ids)
+    }
+    langTabs = [...byLang.entries()].map(([lang, dictIds]) => ({
+      lang,
+      label: langGroupLabel(lang),
+      dictIds,
+    }))
+    renderTabs()
+  } catch {
+    // 拿不到词典列表就不显示标签行，搜索退回「全部」
   }
 }
 
-function renderLangs(): void {
-  langsRow.innerHTML = groups
+function renderTabs(): void {
+  const chips = [{ lang: '', label: '全部', dictIds: [] as number[] }, ...langTabs]
+  langsRow.innerHTML = chips
     .map(
-      (group) => `
-      <button class="lang-chip ${group.lang === activeLang ? 'active' : ''}" data-lang="${group.lang}">
-        ${group.label}<span class="count">${group.items.length}</span>
+      (tab) => `
+      <button class="lang-chip ${tab.lang === activeScope ? 'active' : ''}" data-lang="${tab.lang}">
+        ${tab.label}<span class="count">${tab.dictIds.length || ''}</span>
       </button>`,
     )
     .join('')
-  langsRow.hidden = groups.length === 0
+  langsRow.hidden = chips.length <= 2 && langTabs.length <= 1
 }
 
+const scopeDictIds = (): number[] | undefined =>
+  langTabs.find((t) => t.lang === activeScope && t.dictIds.length)?.dictIds
+
 function renderHits() {
-  const items = visibleHits()
+  const items = hits
   hitsList.innerHTML = items
     .map(
       (hit, index) => `
@@ -203,11 +206,9 @@ async function runSearch(next: string) {
   input.value = trimmed
   setStatus('查询中…')
   try {
-    hits = await api.search(trimmed)
+    hits = await api.search(trimmed, scopeDictIds())
     if (hits.length === 0) {
       activeIndex = -1
-      groups = []
-      renderLangs()
       hitsList.innerHTML = ''
       entryHost.innerHTML = ''
       showEmpty(true)
@@ -219,8 +220,6 @@ async function runSearch(next: string) {
     setStatus('')
     activeIndex = 0
     entryHost.scrollTop = 0
-    regroup()
-    renderLangs()
     renderHits()
     await selectHit(0)
   } catch (error) {
@@ -233,7 +232,7 @@ async function runSearch(next: string) {
 }
 
 async function selectHit(index: number) {
-  const hit = visibleHits()[index]
+  const hit = hits[index]
   if (!hit) return
   activeIndex = index
   renderHits()
@@ -274,6 +273,7 @@ async function bootstrap() {
   }
   showEmpty(true)
   setEmptyContent('输入词语开始查词', '按 Enter 查询；↑/↓ 切换命中的词典，Esc 收起窗口。', null)
+  void loadTabs()
   input.focus()
 }
 
@@ -287,12 +287,12 @@ element('search-form').addEventListener('submit', (event) => {
 langsRow.addEventListener('click', (event) => {
   const chip = (event.target as HTMLElement).closest<HTMLButtonElement>('button.lang-chip')
   if (!chip) return
-  activeLang = chip.dataset.lang ?? activeLang
-  activeIndex = 0
-  renderLangs()
-  renderHits()
-  entryHost.scrollTop = 0
-  void selectHit(0)
+  const lang = chip.dataset.lang ?? ''
+  if (lang === activeScope) return
+  activeScope = lang
+  renderTabs()
+  // 切范围就用当前词重查（与网页版「点标签=勾选该语言全部词典」一致）
+  if (queryWord) void runSearch(queryWord)
 })
 
 hitsList.addEventListener('click', (event) => {
@@ -319,7 +319,7 @@ document.addEventListener('keydown', (event) => {
     return
   }
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-    const items = visibleHits()
+    const items = hits
     if (items.length === 0) return
     event.preventDefault()
     const delta = event.key === 'ArrowDown' ? 1 : -1

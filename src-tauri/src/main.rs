@@ -17,7 +17,7 @@ use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
-use mydict::{AppState, AuthStatus, Hit, Settings};
+use mydict::{AppState, AuthStatus, Hit, PublicDict, Settings};
 
 /// 默认热键。
 ///
@@ -90,6 +90,7 @@ fn main() {
             login,
             logout,
             search,
+            dictionaries,
             entry_html,
             hide_window,
             selection_text,
@@ -602,8 +603,22 @@ fn logout(state: tauri::State<'_, AppState>) {
 }
 
 #[tauri::command]
-async fn search(state: tauri::State<'_, AppState>, word: String) -> Result<Vec<Hit>, String> {
-    state.search(&word).await
+async fn search(
+    state: tauri::State<'_, AppState>,
+    word: String,
+    dict_ids: Option<Vec<i64>>,
+) -> Result<Vec<Hit>, String> {
+    state
+        .search(&word, dict_ids.as_deref())
+        .await
+}
+
+#[tauri::command]
+async fn dictionaries(
+    state: tauri::State<'_, AppState>,
+    scope: String,
+) -> Result<Vec<PublicDict>, String> {
+    state.dictionaries(&scope).await
 }
 
 #[tauri::command]

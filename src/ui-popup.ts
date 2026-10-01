@@ -76,8 +76,10 @@ const statusBox = element('p-status')
 
 let settings: Settings
 let hits: Hit[] = []
-let groups: { lang: string; label: string; items: Hit[] }[] = []
-let activeLang = ''
+// 语言标签 = 检索范围选择器（对齐网页版）：数据源是**词典库**而不是命中结果——
+// 库里有哪几种语言就显示哪几项，与这一次命中了什么无关。scope 为空 = 全部（服务端按输入语言路由）。
+let langTabs: { lang: string; label: string; dictIds: number[] }[] = []
+let activeScope = ''
 let expandedKey: string | null = null
 let queryWord = ''
 const frames = new Map<string, EntryFrame>()
@@ -93,44 +95,45 @@ const applyTheme = (theme: string) => {
 
 /* ---------- 语言分组 ---------- */
 
-function regroup(): void {
-  const byLang = new Map<string, Hit[]>()
-  for (const hit of hits) {
-    const lang = langGroupOf(hit.lang_from)
-    const list = byLang.get(lang) ?? []
-    list.push(hit)
-    byLang.set(lang, list)
-  }
-  // 排序：与输入语言一致的组在前，其后按命中数降序
-  groups = [...byLang.entries()]
-    .map(([lang, items]) => ({ lang, label: langGroupLabel(lang), items }))
-    .sort((a, b) => {
-      const aMatch = a.items.some((item) => item.lang_match !== false) ? 0 : 1
-      const bMatch = b.items.some((item) => item.lang_match !== false) ? 0 : 1
-      return aMatch - bMatch || b.items.length - a.items.length
-    })
-  if (!groups.some((g) => g.lang === activeLang)) {
-    activeLang = groups[0]?.lang ?? ''
+async function loadTabs(): Promise<void> {
+  try {
+    const dicts = await api.dictionaries('usable')
+    const byLang = new Map<string, number[]>()
+    for (const d of dicts) {
+      const lang = langGroupOf(d.lang_from)
+      const ids = byLang.get(lang) ?? []
+      ids.push(d.id)
+      byLang.set(lang, ids)
+    }
+    langTabs = [...byLang.entries()].map(([lang, dictIds]) => ({
+      lang,
+      label: langGroupLabel(lang),
+      dictIds,
+    }))
+    renderTabs()
+  } catch {
+    // 拿不到词典列表就不显示标签行，搜索退回「全部」
   }
 }
 
-function renderLangs(): void {
-  langsRow.innerHTML = groups
+function renderTabs(): void {
+  const chips = [{ lang: '', label: '全部', dictIds: [] as number[] }, ...langTabs]
+  langsRow.innerHTML = chips
     .map(
-      (group) => `
-      <button class="lang-chip ${group.lang === activeLang ? 'active' : ''}" data-lang="${group.lang}">
-        ${group.label}<span class="count">${group.items.length}</span>
+      (tab) => `
+      <button class="lang-chip ${tab.lang === activeScope ? 'active' : ''}" data-lang="${tab.lang}">
+        ${tab.label}<span class="count">${tab.dictIds.length || ''}</span>
       </button>`,
     )
     .join('')
 }
 
-/* ---------- 手风琴词条区 ---------- */
+const scopeDictIds = (): number[] | undefined =>
+  langTabs.find((t) => t.lang === activeScope && t.dictIds.length)?.dictIds
+
+/* ---------------- 手风琴词条区 ---------------- */
 
 const hitKey = (hit: Hit): string => `${hit.dictionary_id}-${hit.id}`
-
-/** 当前语言组里的命中（展开/折叠都只在这个组里发生） */
-const visibleHits = (): Hit[] => groups.find((g) => g.lang === activeLang)?.items ?? []
 
 async function toggleExpand(hit: Hit): Promise<void> {
   const key = hitKey(hit)
@@ -152,7 +155,7 @@ async function toggleExpand(hit: Hit): Promise<void> {
 
 /** 展开时在状态栏亮出当前词典与位置——iframe 拉高后其余标题条在视口外，这是唯一的锚 */
 function reportExpandedDict(hit: Hit): void {
-  const items = visibleHits()
+  const items = hits
   const n = items.findIndex((h) => hitKey(h) === hitKey(hit)) + 1
   setStatus(`${hit.dictionary_name}（${n}/${items.length}）· ↑/↓ 切换词典`)
 }
@@ -207,7 +210,7 @@ function renderAccordion(): void {
     }
   }
 
-  accHost.innerHTML = visibleHits()
+  accHost.innerHTML = hits
     .map((hit) => {
       const key = hitKey(hit)
       const expanded = key === expandedKey
@@ -251,22 +254,18 @@ async function runSearch(next: string): Promise<void> {
   setStatus('查询中…')
   expandedKey = null
   try {
-    hits = await api.search(trimmed)
+    hits = await api.search(trimmed, scopeDictIds())
     if (hits.length === 0) {
-      groups = []
-      renderLangs()
       renderAccordion()
       setStatus(`没有找到「${trimmed}」`)
       return
     }
-    regroup()
-    renderLangs()
     // 新查询从顶部开始看，否则沿用上一次的滚动位置，新词条可能整个落在视口之外
     accHost.scrollTop = 0
     // 默认展开排名第一的词典（当前语言组里的第一条）
-    expandedKey = hitKey(visibleHits()[0])
+    expandedKey = hitKey(hits[0])
     renderAccordion()
-    await loadEntry(visibleHits()[0])
+    await loadEntry(hits[0])
   } catch (error) {
     setStatus(String(error), 'error')
   }
@@ -302,7 +301,7 @@ element('p-form').addEventListener('submit', (event) => {
 accHost.addEventListener('click', (event) => {
   const head = (event.target as HTMLElement).closest<HTMLButtonElement>('button.acc-head')
   if (!head || !head.dataset.key) return
-  const hit = visibleHits().find((h) => hitKey(h) === head.dataset.key)
+  const hit = hits.find((h) => hitKey(h) === head.dataset.key)
   void api.note(`acc 点击 key=${head.dataset.key} 命中=${hit ? hitKey(hit) : '无'}`)
   if (hit) void toggleExpand(hit)
 })
@@ -310,13 +309,12 @@ accHost.addEventListener('click', (event) => {
 langsRow.addEventListener('click', (event) => {
   const chip = (event.target as HTMLElement).closest<HTMLButtonElement>('button.lang-chip')
   if (!chip) return
-  activeLang = chip.dataset.lang ?? activeLang
-  expandedKey = null
-  renderLangs()
-  renderAccordion()
-  // 切组后默认展开该组排名第一的词典
-  const first = visibleHits()[0]
-  if (first) void toggleExpand(first)
+  const lang = chip.dataset.lang ?? ''
+  if (lang === activeScope) return
+  activeScope = lang
+  renderTabs()
+  // 切范围就用当前词重查（与网页版「点标签=勾选该语言全部词典」一致）
+  if (queryWord) void runSearch(queryWord)
 })
 
 element('p-hide').addEventListener('click', () => void api.hideWindow())
@@ -339,7 +337,7 @@ document.addEventListener('keydown', (event) => {
   // ↑/↓ 切换展开的词典（对齐网页版 ←/→ 的 moveExpanded）。单行输入框里这两个键
   // 没有原生用途，聚焦时也接管； 原查询词不丢。
   if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-    const items = visibleHits()
+    const items = hits
     if (items.length === 0) return
     event.preventDefault()
     const index = items.findIndex((h) => hitKey(h) === expandedKey)
@@ -377,6 +375,7 @@ async function bootstrap(): Promise<void> {
     modal.open()
     return
   }
+  void loadTabs()
   wordInput.focus()
 }
 

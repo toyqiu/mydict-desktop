@@ -40,6 +40,17 @@ struct WebQueryResponse {
     results: Vec<Hit>,
 }
 
+/// `/api/dict/dictionaries` 的条目：词典列表（语言标签行的数据源）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublicDict {
+    pub id: i64,
+    pub name: String,
+    #[serde(default)]
+    pub lang_from: String,
+    #[serde(default)]
+    pub lang_to: String,
+}
+
 /// 服务端 `TokenPairResponse`
 #[derive(Debug, Deserialize)]
 struct TokenPair {
@@ -335,13 +346,33 @@ impl AppState {
         serde_json::from_str(&body).map_err(|e| format!("响应解析失败：{e}"))
     }
 
-    pub async fn search(&self, word: &str) -> Result<Vec<Hit>, String> {
+    /// 词典列表（scope=usable 当前用户可用的启用词典）。
+    /// 语言标签行的数据源来自**词典库**而不是命中结果——网页版的标签就是检索范围选择器，
+    /// 库里有哪几种语言就显示哪几项，与这一次查询命中了什么无关。
+    pub async fn dictionaries(&self, scope: &str) -> Result<Vec<PublicDict>, String> {
         let response = self
             .get_authed(&format!(
-                "/api/dict/search?word={}",
-                urlencode(word)
+                "/api/dict/dictionaries?scope={}",
+                urlencode(scope)
             ))
             .await?;
+        Self::parse_or_error(response).await
+    }
+
+    pub async fn search(&self, word: &str, dict_ids: Option<&[i64]>) -> Result<Vec<Hit>, String> {
+        let mut path = format!("/api/dict/search?word={}", urlencode(word));
+        if let Some(ids) = dict_ids {
+            if !ids.is_empty() {
+                // 检索范围（语言标签选择）：与网页版侧边栏勾选同一参数
+                let joined = ids
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                path.push_str(&format!("&dict={}", urlencode(&joined)));
+            }
+        }
+        let response = self.get_authed(&path).await?;
         let parsed: WebQueryResponse = Self::parse_or_error(response).await?;
         Ok(parsed.results)
     }

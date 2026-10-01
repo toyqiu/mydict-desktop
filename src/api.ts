@@ -32,6 +32,13 @@ export interface AuthStatus {
   server_url: string
 }
 
+export interface DictInfo {
+  id: number
+  name: string
+  lang_from: string
+  lang_to: string
+}
+
 export const api = {
   getSettings: () => invoke<Settings>('get_settings'),
   saveSettings: (settings: Settings) => invoke<void>('save_settings', { settings }),
@@ -39,7 +46,10 @@ export const api = {
   authStatus: () => invoke<AuthStatus>('auth_status'),
   login: (username: string, password: string) => invoke<void>('login', { username, password }),
   logout: () => invoke<void>('logout'),
-  search: (word: string) => invoke<Hit[]>('search', { word }),
+  /** 词典列表（scope=usable 当前可用）：语言标签行的数据源来自词典库 */
+  dictionaries: (scope = 'usable') => invoke<DictInfo[]>('dictionaries', { scope }),
+  search: (word: string, dictIds?: number[]) =>
+    invoke<Hit[]>('search', { word, dictIds: dictIds ?? null }),
   entryHtml: (dictionaryId: number, word: string, entryIds: number[]) =>
     invoke<string>('entry_html', { dictionaryId, word, entryIds }),
   hideWindow: () => invoke<void>('hide_window'),
