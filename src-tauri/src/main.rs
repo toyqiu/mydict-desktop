@@ -32,6 +32,17 @@ const DEFAULT_HOTKEY: &str = "super+shift+d";
 
 fn main() {
     tauri::Builder::default()
+        // 单实例（必须第一个注册）：二次启动时这里先跑——把已有实例唤到前台，
+        // 新进程随即退出。启动菜单/自启/热键外再点一次图标，不会再开出第二个托盘。
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("popup") {
+                let _ = window.show();
+                app.state::<AppState>().set_window_visible(true);
+                let _ = window.set_focus();
+                let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
+                eprintln!("[single-instance] 二次启动 → 已唤起现有实例");
+            }
+        }))
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             // 自启时静默进托盘：不带 --show，窗口保持隐藏
