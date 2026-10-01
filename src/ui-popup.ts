@@ -373,6 +373,12 @@ void listen('mydict:shown', () => {
 // 托盘菜单里的「设置…」（Rust 侧 emit 到 popup；此前没人接，托盘点设置只显示面板不弹窗）
 void listen('mydict:open-settings', () => modal.open())
 
+// 主界面（或本窗）保存设置后同步：主题立即切换，不再「主界面暗色、面板亮色」
+void listen<Settings>('mydict:settings-updated', (event) => {
+  settings = event.payload
+  applyTheme(settings.theme)
+})
+
 void listen<string>('mydict:word', (event) => {
   if (typeof event.payload === 'string' && event.payload.trim()) {
     void runSearch(event.payload)

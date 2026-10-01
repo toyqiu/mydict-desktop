@@ -575,6 +575,8 @@ fn save_settings(app: tauri::AppHandle, settings: Settings) -> Result<(), String
         parse_hotkey(&settings.hotkey)?;
     }
     state.set_settings(settings.clone());
+    // 广播给全部窗口：另一侧窗口里的 settings 副本（主题/服务器地址…）不用重启才生效
+    let _ = app.emit("mydict:settings-updated", settings.clone());
     if settings.hotkey != previous_hotkey {
         register_hotkey(&app, &settings.hotkey);
     }

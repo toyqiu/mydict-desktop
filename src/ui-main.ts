@@ -46,7 +46,7 @@ app.innerHTML = `
       <button class="primary" type="submit">查询</button>
     </form>
 
-    <div class="status" id="status"></div>
+    <div class="status" id="status" hidden></div>
 
     <nav class="langs" id="langs" hidden></nav>
 
@@ -105,8 +105,7 @@ function applyTheme(theme: string) {
 function setStatus(message: string, kind: 'info' | 'error' = 'info') {
   statusBox.textContent = message
   statusBox.className = `status ${kind}`
-  // 空文本靠 CSS 的 .status:empty 隐身（保留布局），不再用 hidden 属性——
-  // 隐现会改变文档流高度，正是切换标签闪动的来源之一
+  statusBox.hidden = !message
 }
 
 function escapeHtml(raw: string): string {
@@ -220,7 +219,8 @@ async function runSearch(next: string) {
   if (!trimmed) return
   queryWord = trimmed
   input.value = trimmed
-  setStatus('查询中…')
+  // 不显示「查询中…」：状态条隐现（带边框底色的一整条）会让结果区上下弹跳——
+  // 切语言标签时这就是用户看到的闪动。本地查询毫秒级，完成前保留旧内容即可。
   try {
     hits = await api.search(trimmed, scopeDictIds())
     if (hits.length === 0) {
@@ -345,6 +345,16 @@ document.addEventListener('keydown', (event) => {
 
 // 托盘菜单里的「设置…」
 void listen('mydict:open-settings', () => openSettings())
+
+// 另一个窗口保存了设置：同步副本并立即换主题（此前「主界面暗色、面板亮色」就是这么来的）
+void listen<Settings>('mydict:settings-updated', (event) => {
+  settings = event.payload
+  applyTheme(settings.theme)
+  if (settings.hotkey) {
+    hotkeyChip.textContent = settings.hotkey
+    hotkeyChip.hidden = false
+  }
+})
 
 // 模态必须挂进 DOM：此前只创建未 append，主窗口的 ⚙/「打开设置」点了没有任何反应
 settingsHost.appendChild(settingsModal.element)
