@@ -162,6 +162,7 @@ fn main() {
             open_external,
             open_viewer,
             take_viewer_payload,
+            show_viewer,
             close_viewer,
         ])
         .run(tauri::generate_context!())
@@ -775,8 +776,16 @@ fn open_viewer(
     .title("图片查看器")
     .decorations(false)
     .always_on_top(true)
-    .skip_taskbar(true)
+    // Windows 上绝不 skip_taskbar：v0.1.0 实测「置顶 + 全屏 + 不进任务栏」的窗口在
+    // WebView2 初始化完成前是一块白幕，任务栏/Alt+Tab 都找不到它，Alt+F4 也无焦点
+    // 可收——整台机器被锁死。进任务栏后至少随时可以从任务栏关闭/切换。
+    .skip_taskbar(!cfg!(windows))
     .resizable(false)
+    // 先隐藏，等前端取到图片、界面就绪后由 show_viewer 显示：WebView2 初始化
+    // 期间的默认白底不能露出来
+    .visible(false)
+    .focused(true)
+    .background_color(tauri::window::Color(0, 0, 0, 255))
     .position(origin.x as f64 / scale, origin.y as f64 / scale)
     .inner_size(bounds.width as f64 / scale, bounds.height as f64 / scale)
     .build();
@@ -796,6 +805,16 @@ fn open_viewer(
 #[tauri::command]
 fn take_viewer_payload(app: tauri::AppHandle) -> Option<mydict::ViewerPayload> {
     app.state::<AppState>().take_viewer_payload()
+}
+
+/// 查看器前端就绪（已拿到图片并开始渲染）后由前端调用：此刻显示窗口并聚焦。
+/// 与 `visible(false)` 的创建方式配套——黑底就绪后才上屏，WebView2 的白幕不会露出来。
+#[tauri::command]
+fn show_viewer(app: tauri::AppHandle) {
+    if let Some(viewer) = app.get_webview_window("viewer") {
+        let _ = viewer.show();
+        let _ = viewer.set_focus();
+    }
 }
 
 /// 查看器里退出了（Esc/点空白），销毁窗口。popup/main 还在，应用不会跟着退出。

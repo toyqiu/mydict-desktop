@@ -22,8 +22,14 @@ document.body.style.background = '#000'
 
 const lightbox = mountImageLightbox({
   onOpenChange: (open) => {
-    // 关闭即销毁窗口；popup/main 还在，应用不会退出
-    if (!open) void invoke('close_viewer').catch(() => undefined)
+    if (open) {
+      // 内容就绪（黑底已就位）才上屏：Windows 上 WebView2 初始化期间的默认白幕
+      // 不能露出来，更不能以「置顶全屏白幕」的形态锁死桌面
+      void invoke('show_viewer').catch(() => undefined)
+    } else {
+      // 关闭即销毁窗口；popup/main 还在，应用不会退出
+      void invoke('close_viewer').catch(() => undefined)
+    }
   },
 })
 document.body.appendChild(lightbox.element)
