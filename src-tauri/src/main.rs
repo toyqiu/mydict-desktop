@@ -166,23 +166,48 @@ pub(crate) fn startup_log(msg: &str) {
     }
 }
 
+/// 与 tauri 的 app_config_dir 同路径：{config_dir}/{identifier}。
+/// 在 Builder 启动前就要用（state 提前 manage，见 main），不能依赖 app handle。
+fn manual_app_config_dir() -> PathBuf {
+    #[cfg(target_os = "windows")]
+    let base = std::env::var("APPDATA").map(PathBuf::from);
+    #[cfg(not(target_os = "windows"))]
+    let base = std::env::var("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|_| {
+            std::env::var("HOME").map(|h| PathBuf::from(h).join(".config"))
+        });
+    base.unwrap_or_else(|_| PathBuf::from("."))
+        .join("com.toyqiu.mydict.desktop")
+}
+
 fn main() {
     startup_log(&format!("main() 进入 v{}（本次启动属于这个版本的二进制）", env!("CARGO_PKG_VERSION")));
     std::panic::set_hook(Box::new(|info| {
         let bt = std::backtrace::Backtrace::force_capture();
         startup_log(&format!("[panic] {info}\n[backtrace] {bt}"));
     }));
+    // **state 在任何插件/窗口创建之前就 manage**：WebView2 初始化会重入消息泵，
+    // 单实例回调等可能在该阶段被派发——state 晚于它们就绪就会 panic（v0.2.6 实测，
+    // backtrace：DispatchMessageW → CreateSharedWebViewEnvironmentInternal → state()）。
+    // 配置目录手动计算（与 tauri 的 app_config_dir 一致，不依赖 app handle）。
+    let config_dir = manual_app_config_dir();
+    let _ = std::fs::create_dir_all(&config_dir);
+    let state = AppState::load(config_dir);
     tauri::Builder::default()
+        // **state 在任何插件/窗口创建之前就 manage**：WebView2 初始化会重入消息泵，
+        // 单实例回调等可能在该阶段被派发——state 晚于它们就绪就会 panic（v0.2.6 实测，
+        // backtrace：DispatchMessageW → CreateSharedWebViewEnvironmentInternal → state()）。
+        // 配置目录手动计算（与 tauri 的 app_config_dir 同路径，不依赖 app handle）。
+        .manage(state)
         // 单实例（必须第一个注册）：二次启动时这里先跑——把已有实例唤到前台，
         // 新进程随即退出。启动菜单/自启/热键外再点一次图标，不会再开出第二个托盘。
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             // 双击连点/与自启撞车时，回调可能在 setup 的 manage() 之前到达：
             // state() 此时会 panic 且该上下文不能 unwind → 整个应用直接死
             // （v0.2.3 的 debug.log 抓到实锤）。setup 未完成就安全忽略本次唤起。
-            let Some(state) = app.try_state::<AppState>() else {
-                startup_log("[single-instance] setup 未完成，忽略本次唤起");
-                return;
-            };
+            // state 已在 main() 提前 manage，这里必然存在
+            let state = app.state::<AppState>();
             if let Some(window) = app.get_webview_window("popup") {
                 let _ = window.show();
                 state.set_window_visible(true);
@@ -208,11 +233,8 @@ fn main() {
                 .build(),
         )
         .setup(|app| {
-            let dir: PathBuf = app.path().app_config_dir()?;
-            std::fs::create_dir_all(&dir)?;
-            let state = AppState::load(dir);
-            let spec = state.settings().hotkey;
-            app.manage(state);
+            // state 已在 main() 最开头提前加载并 manage（早于所有插件与窗口创建）
+            let spec = app.state::<AppState>().settings().hotkey.clone();
             startup_log("setup: 配置加载完成");
             register_hotkey(app.handle(), &spec);
             startup_log("setup: 热键注册流程完成");
