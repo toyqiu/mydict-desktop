@@ -779,7 +779,7 @@ fn read_xclip(_selection: &str) -> String {
 #[cfg(target_os = "windows")]
 fn read_clipboard_text() -> String {
     arboard::Clipboard::new()
-        .and_then(|cb| cb.get_text().map(|t| t.trim().to_string()))
+        .and_then(|mut cb| cb.get_text().map(|t| t.trim().to_string()))
         .unwrap_or_default()
 }
 
