@@ -416,3 +416,73 @@ body {
   pointer-events: none;
   white-space: nowrap;
 }
+
+
+/* ---------- 翻译视图（双窗格，popup / 主界面共用） ---------- */
+.trans-host {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.trans-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.trans-target-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.trans-target {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-soft);
+  background: var(--input-bg);
+  color: var(--text);
+}
+
+.trans-original {
+  white-space: pre-wrap;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-soft);
+  background: var(--surface-alt);
+}
+
+.trans-result {
+  white-space: pre-wrap;
+  font-size: 1.02rem;
+  line-height: 1.7;
+  padding: 14px 16px;
+  border-radius: var(--radius-soft);
+  background: var(--entry-bg);
+  color: var(--entry-fg);
+  min-height: 72px;
+}
+
+.trans-loading {
+  color: var(--text-muted);
+}
+
+.trans-error {
+  color: var(--danger);
+  margin-right: 10px;
+}
+
+.trans-retry {
+  padding: 3px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-soft);
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  cursor: pointer;
+}

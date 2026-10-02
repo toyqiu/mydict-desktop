@@ -24,6 +24,8 @@ export interface Settings {
   selection_first: boolean
   /** 剪贴板监听：复制文字自动查（≤60 字） */
   clipboard_watch: boolean
+  /** 翻译链路的默认目标语言（Edge 免 key 端点） */
+  translate_target_lang: string
 }
 
 export interface AuthStatus {
@@ -57,4 +59,7 @@ export const api = {
   focusProbe: () => invoke<string>('focus_probe'),
   openMain: () => invoke<void>('open_main'),
   openExternal: (url: string) => invoke<void>('open_external', { url }),
+  /** Edge 免 key 翻译：texts 与返回译文顺序一一对应；from 传 null 即自动检测 */
+  translate: (texts: string[], from: string | null, to: string) =>
+    invoke<string[]>('translate', { texts, from, to }),
 }

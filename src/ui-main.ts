@@ -5,6 +5,12 @@ import { api, type Hit, type Settings } from './api'
 import { createEntryFrame, type EntryFrame } from './entry-frame'
 import { mountSettingsModal } from './settings-modal'
 import { langGroupLabel, langGroupOf } from './langs'
+import {
+  TRANSLATE_TAB,
+  isTranslateCandidate,
+  mountTranslateView,
+  type TranslateView,
+} from './translate'
 import './theme.css'
 import './styles.css'
 
@@ -56,6 +62,8 @@ app.innerHTML = `
       <section class="entry" id="entry"></section>
     </main>
 
+    <div class="trans-host" id="trans" hidden></div>
+
     <div class="batch-nav" id="batch-nav" hidden>
       <button type="button" data-batch="prev">‹ 上一批</button>
       <span id="batch-label"></span>
@@ -83,6 +91,9 @@ const emptyBox = element('empty')
 const resultsPane = element('results')
 const hotkeyChip = element('hotkey-chip')
 const langsRow = element<HTMLDivElement>('langs')
+const transHost = element<HTMLDivElement>('trans')
+let queryIsTranslate = false
+let translateView: TranslateView | null = null
 const settingsHost = element('settings-host')
 
 let settings: Settings = {
@@ -93,6 +104,7 @@ let settings: Settings = {
   hide_on_blur: true,
   selection_first: true,
   clipboard_watch: true,
+  translate_target_lang: 'zh-Hans',
 }
 let hits: Hit[] = []
 let activeIndex = -1
@@ -193,7 +205,11 @@ async function loadTabs(): Promise<void> {
 }
 
 function renderTabs(): void {
-  const chips = [{ lang: '', label: '全部', dictIds: [] as number[] }, ...langTabs]
+  const chips = [
+    { lang: '', label: '全部', dictIds: [] as number[] },
+    ...langTabs,
+    { lang: TRANSLATE_TAB, label: '翻译', dictIds: [] as number[] },
+  ]
   const existing = [...langsRow.children] as HTMLElement[]
   const sameSet =
     existing.length === chips.length &&
@@ -300,11 +316,47 @@ function renderHits() {
     .join('')
 }
 
+/** 进入翻译视图（主界面）：结果区隐藏，翻译视图懒加载 */
+function enterTranslateView(text: string): void {
+  queryIsTranslate = true
+  activeScope = TRANSLATE_TAB
+  renderTabs()
+  resultsPane.hidden = true
+  transHost.hidden = false
+  if (!translateView) {
+    translateView = mountTranslateView(transHost, {
+      text,
+      getTargetLang: () => settings.translate_target_lang || 'zh-Hans',
+    })
+  } else {
+    translateView.translate(text)
+  }
+}
+
+/** 离开翻译视图：显示结果区 */
+function leaveTranslateView(): void {
+  if (!queryIsTranslate) return
+  queryIsTranslate = false
+  if (activeScope === TRANSLATE_TAB) {
+    activeScope = ''
+    renderTabs()
+  }
+  transHost.hidden = true
+  resultsPane.hidden = false
+}
+
 async function runSearch(next: string) {
   const trimmed = next.trim()
   if (!trimmed) return
   queryWord = trimmed
   input.value = trimmed
+  // 线路自动判定：像句子/长短语 → 翻译视图（词典查询不做，切回词典标签再查）
+  if (isTranslateCandidate(trimmed)) {
+    enterTranslateView(trimmed)
+    setStatus('')
+    return
+  }
+  leaveTranslateView()
   // 不显示「查询中…」：状态条隐现（带边框底色的一整条）会让结果区上下弹跳——
   // 切语言标签时这就是用户看到的闪动。本地查询毫秒级，完成前保留旧内容即可。
   try {
@@ -398,8 +450,16 @@ langsRow.addEventListener('click', (event) => {
   if (!chip) return
   const lang = chip.dataset.lang ?? ''
   if (lang === activeScope) return
+  if (lang === TRANSLATE_TAB) {
+    // 翻译伪标签：直进翻译视图（绕过线路判定——任何查询都能一键看译文）
+    activeScope = TRANSLATE_TAB
+    renderTabs()
+    if (queryWord) enterTranslateView(queryWord)
+    return
+  }
   activeScope = lang
   renderTabs()
+  leaveTranslateView()
   // 切范围就用当前词重查（与网页版「点标签=勾选该语言全部词典」一致）
   if (queryWord) void runSearch(queryWord)
 })
@@ -435,13 +495,22 @@ document.addEventListener('keydown', (event) => {
   }
   // ←/→ 切换语言标签（检索范围），切换后用当前词重查
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    if (langTabs.length === 0) return
+    // 循环序列 = 语言标签 + 末尾的翻译标签；「全部」只是点击用的重置位，不参与循环
+    if (langTabs.length === 0 && !queryWord) return
     event.preventDefault()
-    const ordered = [{ lang: '', label: '全部' }, ...langTabs]
-    const at = ordered.findIndex((t) => t.lang === activeScope)
+    const ordered = [...langTabs, { lang: TRANSLATE_TAB }]
     const delta = event.key === 'ArrowRight' ? 1 : -1
-    activeScope = ordered[(((at + delta) % ordered.length) + ordered.length) % ordered.length].lang
+    const at = ordered.findIndex((t) => t.lang === activeScope)
+    const next = ordered[(((at + delta) % ordered.length) + ordered.length) % ordered.length]
+    if (next.lang === TRANSLATE_TAB) {
+      activeScope = TRANSLATE_TAB
+      renderTabs()
+      if (queryWord) enterTranslateView(queryWord)
+      return
+    }
+    activeScope = next.lang
     renderTabs()
+    leaveTranslateView()
     if (queryWord) void runSearch(queryWord)
     return
   }

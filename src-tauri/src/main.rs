@@ -100,6 +100,56 @@ mod win_rounding {
     }
 }
 
+/// 翻译：Edge 免 key 接口（无鉴权）。body 是裸 JSON 字符串数组；UA 必须伪装 Edge
+/// 否则可能 403。与词典链路互不依赖——MyDict 不可达时翻译照常工作。
+#[tauri::command]
+async fn translate(
+    texts: Vec<String>,
+    from: Option<String>,
+    to: String,
+) -> Result<Vec<String>, String> {
+    let mut url = format!(
+        "https://edge.microsoft.com/translate/translatetext?to={}&isEnterpriseClient=false",
+        mydict::urlencode(&to)
+    );
+    if let Some(f) = from.as_deref() {
+        if f != "auto" && !f.is_empty() {
+            url.push_str(&format!("&from={}", mydict::urlencode(f)));
+        }
+    }
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header(
+            "User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+        )
+        .json(&texts)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| format!("网络失败：{e}"))?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(format!("翻译服务 HTTP {status}"));
+    }
+    let data: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(data
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .map(|it| {
+                    it["translations"][0]["text"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string()
+                })
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
 fn main() {
     tauri::Builder::default()
         // 单实例（必须第一个注册）：二次启动时这里先跑——把已有实例唤到前台，
@@ -282,6 +332,7 @@ fn main() {
             take_viewer_payload,
             show_viewer,
             close_viewer,
+            translate,
         ])
         .run(tauri::generate_context!())
         .expect("应用启动失败");

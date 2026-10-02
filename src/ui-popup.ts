@@ -35,6 +35,12 @@ window.addEventListener(
 )
 
 import { langGroupLabel, langGroupOf } from './langs'
+import {
+  TRANSLATE_TAB,
+  isTranslateCandidate,
+  mountTranslateView,
+  type TranslateView,
+} from './translate'
 
 const element = <T extends HTMLElement>(id: string): T => {
   const found = document.getElementById(id)
@@ -61,6 +67,7 @@ app.innerHTML = `
     <nav class="langs" id="p-langs"></nav>
 
     <div class="acc" id="p-acc"></div>
+    <div class="trans-host" id="p-trans" hidden></div>
 
     <footer class="popfoot">
       <span class="status-inline" id="p-status"></span>
@@ -72,6 +79,9 @@ app.innerHTML = `
 
 const wordInput = element<HTMLInputElement>('p-word')
 const langsRow = element('p-langs')
+const transHost = element('p-trans')
+let queryIsTranslate = false
+let translateView: TranslateView | null = null
 const accHost = element('p-acc')
 const statusBox = element('p-status')
 
@@ -116,7 +126,11 @@ async function loadTabs(): Promise<void> {
 }
 
 function renderTabs(): void {
-  const chips = [{ lang: '', label: '全部', dictIds: [] as number[] }, ...langTabs]
+  const chips = [
+    { lang: '', label: '全部', dictIds: [] as number[] },
+    ...langTabs,
+    { lang: TRANSLATE_TAB, label: '翻译', dictIds: [] as number[] },
+  ]
   const existing = [...langsRow.children] as HTMLElement[]
   const sameSet =
     existing.length === chips.length &&
@@ -334,11 +348,47 @@ function escapeHtml(raw: string): string {
 
 /* ---------- 搜索 ---------- */
 
+/** 进入翻译视图：词典分组隐藏，译文懒加载；词典查询不做（切回词典标签时才查） */
+function enterTranslateView(text: string): void {
+  queryIsTranslate = true
+  activeScope = TRANSLATE_TAB
+  renderTabs()
+  accHost.hidden = true
+  transHost.hidden = false
+  if (!translateView) {
+    translateView = mountTranslateView(transHost, {
+      text,
+      getTargetLang: () => settings.translate_target_lang || 'zh-Hans',
+    })
+  } else {
+    translateView.translate(text)
+  }
+}
+
+/** 离开翻译视图：显示词典分组区（内容随词典查询回来后渲染） */
+function leaveTranslateView(): void {
+  if (!queryIsTranslate) return
+  queryIsTranslate = false
+  if (activeScope === TRANSLATE_TAB) {
+    activeScope = ''
+    renderTabs()
+  }
+  accHost.hidden = false
+  transHost.hidden = true
+}
+
 async function runSearch(next: string): Promise<void> {
   const trimmed = next.trim()
   if (!trimmed) return
   wordInput.value = trimmed
   queryWord = trimmed
+  // 线路自动判定：像句子/长短语 → 翻译视图先立起来（词典查询不做，切回词典标签再查）
+  if (isTranslateCandidate(trimmed)) {
+    enterTranslateView(trimmed)
+    setStatus('')
+    return
+  }
+  leaveTranslateView()
   setStatus('查询中…')
   expandedKey = null
   try {
@@ -422,8 +472,16 @@ langsRow.addEventListener('click', (event) => {
   if (!chip) return
   const lang = chip.dataset.lang ?? ''
   if (lang === activeScope) return
+  if (lang === TRANSLATE_TAB) {
+    // 翻译伪标签：直进翻译视图（绕过线路判定——任何查询都能一键看译文）
+    activeScope = TRANSLATE_TAB
+    renderTabs()
+    if (queryWord) enterTranslateView(queryWord)
+    return
+  }
   activeScope = lang
   renderTabs()
+  leaveTranslateView()
   // 切范围就用当前词重查（与网页版「点标签=勾选该语言全部词典」一致）
   if (queryWord) void runSearch(queryWord)
 })
@@ -450,13 +508,22 @@ document.addEventListener('keydown', (event) => {
   // ←/→ 切换语言标签（检索范围）：与网页版「点标签=勾选该语言全部词典」一致，
   // 切换后用当前词重查。单行输入框里这两个键只剩移动光标一个用途，编辑靠全选+输入即可。
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    if (langTabs.length === 0) return
+    // 循环序列 = 语言标签 + 末尾的翻译标签；「全部」只是点击用的重置位，不参与循环
+    if (langTabs.length === 0 && !queryWord) return
     event.preventDefault()
-    const ordered = [{ lang: '', label: '全部' }, ...langTabs]
-    const at = ordered.findIndex((t) => t.lang === activeScope)
+    const ordered = [...langTabs, { lang: TRANSLATE_TAB }]
     const delta = event.key === 'ArrowRight' ? 1 : -1
-    activeScope = ordered[(((at + delta) % ordered.length) + ordered.length) % ordered.length].lang
+    const at = ordered.findIndex((t) => t.lang === activeScope)
+    const next = ordered[(((at + delta) % ordered.length) + ordered.length) % ordered.length]
+    if (next.lang === TRANSLATE_TAB) {
+      activeScope = TRANSLATE_TAB
+      renderTabs()
+      if (queryWord) enterTranslateView(queryWord)
+      return
+    }
+    activeScope = next.lang
     renderTabs()
+    leaveTranslateView()
     if (queryWord) void runSearch(queryWord)
     return
   }

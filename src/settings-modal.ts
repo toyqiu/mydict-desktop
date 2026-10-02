@@ -54,6 +54,23 @@ export function mountSettingsModal(options: SettingsModalOptions): SettingsModal
           <label class="switch"><input type="checkbox" data-role="selection" /><span>划词优先：有选中文字时直接查它</span></label>
           <label class="switch"><input type="checkbox" data-role="clipboard" /><span>剪贴板监听：复制文字自动查（只认 ≤60 字的文本）</span></label>
         </div>
+        <div class="field-group">
+          <div class="group-label">翻译</div>
+          <label><span>译成</span>
+            <select data-role="translate-target">
+              <option value="zh-Hans">简体中文</option>
+              <option value="zh-Hant">繁體中文</option>
+              <option value="en">English</option>
+              <option value="ja">日本語</option>
+              <option value="ko">한국어</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+              <option value="es">Español</option>
+              <option value="ru">Русский</option>
+            </select>
+          </label>
+          <p class="hint">长句/长短语自动走翻译线路；目标语言与原文同语种时自动改译其它语言。</p>
+        </div>
       </div>
       <footer class="modal-foot">
         <span class="status-inline" data-role="status"></span>
@@ -77,6 +94,7 @@ export function mountSettingsModal(options: SettingsModalOptions): SettingsModal
     ;(field<HTMLInputElement>('hide-blur')).checked = settings.hide_on_blur
     ;(field<HTMLInputElement>('selection')).checked = settings.selection_first
     ;(field<HTMLInputElement>('clipboard')).checked = settings.clipboard_watch
+    ;(field<HTMLSelectElement>('translate-target')).value = settings.translate_target_lang || 'zh-Hans'
     ;(field<HTMLInputElement>('password')).value = ''
     setStatus('')
     mask.hidden = false
@@ -156,6 +174,7 @@ export function mountSettingsModal(options: SettingsModalOptions): SettingsModal
       hide_on_blur: field<HTMLInputElement>('hide-blur').checked,
       selection_first: field<HTMLInputElement>('selection').checked,
       clipboard_watch: field<HTMLInputElement>('clipboard').checked,
+      translate_target_lang: field<HTMLSelectElement>('translate-target').value || 'zh-Hans',
     }
     try {
       setStatus('保存中…')

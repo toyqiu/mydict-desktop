@@ -84,6 +84,13 @@ pub struct Settings {
     /// 剪贴板监听：复制文字（≤60 字）自动弹窗查词
     #[serde(default = "default_true")]
     pub clipboard_watch: bool,
+    /// 翻译链路的默认目标语言（Edge 免 key 端点）
+    #[serde(default = "default_translate_target_lang")]
+    pub translate_target_lang: String,
+}
+
+fn default_translate_target_lang() -> String {
+    "zh-Hans".to_string()
 }
 
 fn default_theme() -> String {
@@ -104,6 +111,7 @@ impl Default for Settings {
             hide_on_blur: true,
             selection_first: true,
             clipboard_watch: true,
+            translate_target_lang: default_translate_target_lang(),
         }
     }
 }
@@ -518,7 +526,7 @@ fn friendly_request_error(url: &str, error: &reqwest::Error) -> String {
 }
 
 /// 只转义查询值里必须转义的字符；中文/日文交给 reqwest 自己处理前先 encode 更稳
-fn urlencode(value: &str) -> String {
+pub(crate) fn urlencode(value: &str) -> String {
     let mut out = String::with_capacity(value.len() * 3);
     for byte in value.as_bytes() {
         match byte {
