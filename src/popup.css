@@ -187,8 +187,9 @@
 }
 
 .acc-head .word {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .acc-head .phonetic {
@@ -197,13 +198,14 @@
 }
 
 .acc-head .dict {
-  margin-left: auto;
-  max-width: 44%;
+  /* 词典名是标题条的主视觉（用户要求一眼看清词典名） */
+  max-width: 60%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-secondary);
-  font-size: 0.68rem;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .acc-head .chev {

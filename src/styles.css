@@ -257,9 +257,10 @@ body {
 }
 
 .hit .word {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 0.8rem;
+  font-weight: 500;
   letter-spacing: 0.01em;
+  color: var(--text-secondary);
 }
 
 .hit .phonetic {
@@ -267,15 +268,16 @@ body {
   font-size: 0.72rem;
 }
 
-/* 词典名做成胶囊（在命中词之前、靠左） */
+/* 词典名做成胶囊：标题条的主视觉（词典名在前、靠左、加粗） */
 .hit .dict {
-  max-width: 46%;
+  max-width: 56%;
   padding: 1px 8px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
   background: var(--surface-raised);
-  color: var(--text-secondary);
-  font-size: 0.62rem;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
