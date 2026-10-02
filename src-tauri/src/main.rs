@@ -56,7 +56,7 @@ fn set_dwm_rounded_corners(hwnd: isize) {
 /// （区域外的像素——方形阴影/边缘残留——被系统直接裁掉；代价是 DWM 阴影消失）。
 #[cfg(target_os = "windows")]
 mod win_rounding {
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::AtomicBool;
 
     /// true = 当前系统不支持 DWM 圆角（Win10），需要用区域裁剪
     pub static USE_REGION: AtomicBool = AtomicBool::new(false);
@@ -219,7 +219,7 @@ fn main() {
             #[cfg(target_os = "windows")]
             {
                 if matches!(event, tauri::WindowEvent::Resized(_))
-                    && matches!(window.label().as_str(), "main" | "popup" | "viewer")
+                    && matches!(window.label(), "main" | "popup" | "viewer")
                     && win_rounding::USE_REGION.load(std::sync::atomic::Ordering::Relaxed)
                 {
                     if let (Ok(hwnd), Ok(size), Ok(scale)) =
@@ -228,8 +228,8 @@ fn main() {
                         let d = (10.0 * 2.0 * scale).round() as i32;
                         win_rounding::apply_round_region(
                             hwnd.0 as isize,
-                            size.width,
-                            size.height,
+                            size.width as i32,
+                            size.height as i32,
                             d,
                         );
                     }
