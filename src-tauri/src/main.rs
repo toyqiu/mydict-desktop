@@ -164,8 +164,8 @@ fn main() {
                                 let d = (10.0 * 2.0 * scale).round() as i32;
                                 win_rounding::apply_round_region(
                                     hwnd.0 as isize,
-                                    size.width,
-                                    size.height,
+                                    size.width as i32,
+                                    size.height as i32,
                                     d,
                                 );
                             }
