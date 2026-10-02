@@ -175,9 +175,16 @@ fn main() {
         // 单实例（必须第一个注册）：二次启动时这里先跑——把已有实例唤到前台，
         // 新进程随即退出。启动菜单/自启/热键外再点一次图标，不会再开出第二个托盘。
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // 双击连点/与自启撞车时，回调可能在 setup 的 manage() 之前到达：
+            // state() 此时会 panic 且该上下文不能 unwind → 整个应用直接死
+            // （v0.2.3 的 debug.log 抓到实锤）。setup 未完成就安全忽略本次唤起。
+            let Some(state) = app.try_state::<AppState>() else {
+                startup_log("[single-instance] setup 未完成，忽略本次唤起");
+                return;
+            };
             if let Some(window) = app.get_webview_window("popup") {
                 let _ = window.show();
-                app.state::<AppState>().set_window_visible(true);
+                state.set_window_visible(true);
                 let _ = window.set_focus();
                 let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
                 eprintln!("[single-instance] 二次启动 → 已唤起现有实例");
