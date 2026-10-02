@@ -169,7 +169,8 @@ pub(crate) fn startup_log(msg: &str) {
 fn main() {
     startup_log(&format!("main() 进入 v{}（本次启动属于这个版本的二进制）", env!("CARGO_PKG_VERSION")));
     std::panic::set_hook(Box::new(|info| {
-        startup_log(&format!("[panic] {info}"));
+        let bt = std::backtrace::Backtrace::force_capture();
+        startup_log(&format!("[panic] {info}\n[backtrace] {bt}"));
     }));
     tauri::Builder::default()
         // 单实例（必须第一个注册）：二次启动时这里先跑——把已有实例唤到前台，
