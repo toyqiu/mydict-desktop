@@ -1,6 +1,6 @@
 [package]
 name = "mydict-desktop"
-version = "0.2.8"
+version = "0.3.0"
 description = "MyDict 的桌面查词器"
 authors = ["toyqiuwu"]
 license = "MIT"
@@ -21,6 +21,10 @@ serde_json = "1"
 # rustls 而非 native-tls：局域网部署用的是明文 http，但自建服务常换 https，
 # 用 rustls 免得依赖系统 openssl 版本（Windows 侧构建也少一个坑）
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# Windows 剪贴板监听（Linux 走 xclip 子进程，不需要它；只要文本，关掉 image-data）
+[target.'cfg(target_os = "windows")'.dependencies]
+arboard = { version = "3", default-features = false }
 
 [profile.release]
 codegen-units = 1

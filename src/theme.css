@@ -622,3 +622,23 @@ body {
 .langs {
   flex-shrink: 0;
 }
+
+
+/* ---------- 查看器背景切换按钮（独立查看器窗口右下角） ---------- */
+.viewer-bg-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 3100;
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--radius-soft);
+  background: rgba(0, 0, 0, 0.45);
+  color: #f2f5f4;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.viewer-bg-toggle:hover {
+  background: rgba(0, 0, 0, 0.65);
+}

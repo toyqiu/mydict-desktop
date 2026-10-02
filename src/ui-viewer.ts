@@ -10,6 +10,10 @@
  *   2. 窗口已开着又点了别的图：Rust emit mydict:viewer-image，这里直接换图。
  *
  * 用户退出查看器（Esc / 点空白）→ invoke close_viewer 销毁窗口，回到词典界面。
+ *
+ * 背景：默认**浅色**——黑色底会淹没深色图片/白底扫描件的内容（用户实测反馈）；
+ * 右下角「背景」按钮可一键在深/浅之间切换（深色照片类图片仍有深色可选）。
+ * 提示条与切换按钮自带半透明深色胶囊底，两种背景下都清晰。
  */
 
 import { invoke } from '@tauri-apps/api/core'
@@ -17,13 +21,31 @@ import { listen } from '@tauri-apps/api/event'
 import { mountImageLightbox, type LightboxPayload } from './image-lightbox'
 import './theme.css'
 
-// 查看器整窗就是图片背景，不留应用主题底色
-document.body.style.background = '#000'
+const BG_LIGHT = '#f2f2f2'
+const BG_DARK = '#0a0a0a'
+
+let bgDark = false
+
+const toggleBtn = document.createElement('button')
+toggleBtn.type = 'button'
+toggleBtn.className = 'viewer-bg-toggle'
+document.body.appendChild(toggleBtn)
+
+function applyBg(): void {
+  document.body.style.background = bgDark ? BG_DARK : BG_LIGHT
+  toggleBtn.textContent = bgDark ? '☀ 浅色背景' : '🌙 深色背景'
+}
+applyBg()
+
+toggleBtn.addEventListener('click', () => {
+  bgDark = !bgDark
+  applyBg()
+})
 
 const lightbox = mountImageLightbox({
   onOpenChange: (open) => {
     if (open) {
-      // 内容就绪（黑底已就位）才上屏：Windows 上 WebView2 初始化期间的默认白幕
+      // 内容就绪（背景已就位）才上屏：Windows 上 WebView2 初始化期间的默认白幕
       // 不能露出来，更不能以「置顶全屏白幕」的形态锁死桌面
       void invoke('show_viewer').catch(() => undefined)
     } else {
@@ -33,6 +55,9 @@ const lightbox = mountImageLightbox({
   },
 })
 document.body.appendChild(lightbox.element)
+// 独立查看器不需要 lightbox 自带的深色遮罩（那是弹窗叠加场景的设计）——
+// 遮罩会盖住 body 的背景色，让「浅色背景」永远不生效。背景色交给 body。
+lightbox.element.style.background = 'transparent'
 
 void listen<LightboxPayload>('mydict:viewer-image', (event) => {
   lightbox.show(event.payload)

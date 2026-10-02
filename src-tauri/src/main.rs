@@ -697,7 +697,9 @@ fn start_clipboard_watch(app: tauri::AppHandle) {
             }
             #[cfg(all(unix, not(target_os = "macos")))]
             let text = read_xclip("clipboard");
-            #[cfg(not(all(unix, not(target_os = "macos"))))]
+            #[cfg(target_os = "windows")]
+            let text = read_clipboard_text();
+            #[cfg(not(any(unix, target_os = "windows")))]
             let text = String::new();
             // 只认 ≤60 字的文本：更长的多半是整段内容，不是查词意图
             let trimmed = text.trim().to_string();
@@ -770,6 +772,15 @@ fn read_xclip(selection: &str) -> String {
 #[cfg(not(all(unix, not(target_os = "macos"))))]
 fn read_xclip(_selection: &str) -> String {
     String::new()
+}
+
+/// Windows：读 CLIPBOARD 文本（arboard；剪贴板被占用等瞬时失败按空串处理，
+/// 下一个 700ms 轮询周期自然重试）
+#[cfg(target_os = "windows")]
+fn read_clipboard_text() -> String {
+    arboard::Clipboard::new()
+        .and_then(|cb| cb.get_text().map(|t| t.trim().to_string()))
+        .unwrap_or_default()
 }
 
 #[cfg(not(all(unix, not(target_os = "macos"))))]
