@@ -141,7 +141,36 @@ async fn online_lookup(
     Ok(body)
 }
 
+/// 启动期诊断日志：写到 %APPDATA%\com.toyqiu.mydict.desktop\debug.log。
+///
+/// Windows release 的 stderr 是无效句柄（windows_subsystem="windows"），eprintln! 与
+/// panic 信息全部丢失——「双击图标没反应、任务管理器没进程」这类启动期问题必须靠
+/// 文件日志定位。crate::startup_log 在拿到 app_config_dir 之前也能用（自行拼路径）。
+pub(crate) fn startup_log(msg: &str) {
+    use std::io::Write;
+    let dir = std::env::var("APPDATA")
+        .map(|base| std::path::PathBuf::from(base).join("com.toyqiu.mydict.desktop"))
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    if std::fs::create_dir_all(&dir).is_ok() {
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(dir.join("debug.log"))
+        {
+            let _ = writeln!(f, "{millis} {msg}");
+        }
+    }
+}
+
 fn main() {
+    startup_log("main() 进入");
+    std::panic::set_hook(Box::new(|info| {
+        startup_log(&format!("[panic] {info}"));
+    }));
     tauri::Builder::default()
         // 单实例（必须第一个注册）：二次启动时这里先跑——把已有实例唤到前台，
         // 新进程随即退出。启动菜单/自启/热键外再点一次图标，不会再开出第二个托盘。
@@ -152,6 +181,7 @@ fn main() {
                 let _ = window.set_focus();
                 let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
                 eprintln!("[single-instance] 二次启动 → 已唤起现有实例");
+                startup_log("[single-instance] 二次启动 → 已唤起现有实例");
             }
         }))
         .plugin(tauri_plugin_autostart::init(
@@ -175,11 +205,14 @@ fn main() {
             let state = AppState::load(dir);
             let spec = state.settings().hotkey;
             app.manage(state);
+            startup_log("setup: 配置加载完成");
             register_hotkey(app.handle(), &spec);
+            startup_log("setup: 热键注册流程完成");
             // 托盘建不起来不该拖垮应用：热键与查词是主功能，托盘只是常驻入口
             if let Err(err) = build_tray(app.handle()) {
                 eprintln!("[tray] 托盘构建失败（不影响热键与查词）：{err}");
             }
+            startup_log("setup: 托盘/剪贴板初始化完成");
             start_clipboard_watch(app.handle().clone());
             // Windows 11：系统级圆角（阴影沿圆角绘制，圆角外不再有像素残留）
             #[cfg(target_os = "windows")]
@@ -230,6 +263,7 @@ fn main() {
                     let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
                 }
             }
+            startup_log("setup: 完成（窗口已创建）");
             Ok(())
         })
         .on_window_event(|window, event| {
