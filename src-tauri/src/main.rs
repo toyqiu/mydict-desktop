@@ -167,7 +167,7 @@ pub(crate) fn startup_log(msg: &str) {
 }
 
 fn main() {
-    startup_log("main() 进入");
+    startup_log(&format!("main() 进入 v{}（本次启动属于这个版本的二进制）", env!("CARGO_PKG_VERSION")));
     std::panic::set_hook(Box::new(|info| {
         startup_log(&format!("[panic] {info}"));
     }));
