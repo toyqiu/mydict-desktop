@@ -36,6 +36,22 @@ const DEFAULT_HOTKEY: &str = "ctrl+alt+d";
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
 const DEFAULT_HOTKEY: &str = "super+shift+d";
 
+/// Windows 11：让 DWM 把窗口按圆角处理——系统阴影沿圆角轮廓绘制，圆角外不再有
+/// 方形阴影/像素残留（CSS 圆角与系统圆角之间的缝隙是透明网页内容，透出桌面）。
+/// Win10 不支持该属性（调用无效果），保持方形阴影的旧行为。
+#[cfg(target_os = "windows")]
+fn set_dwm_rounded_corners(hwnd: isize) {
+    #[link(name = "dwmapi")]
+    extern "system" {
+        fn DwmSetWindowAttribute(hwnd: isize, attr: u32, value: *const u32, size: u32) -> i32;
+    }
+    const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
+    const DWMWCP_ROUND: u32 = 2;
+    unsafe {
+        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &DWMWCP_ROUND, 4);
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         // 单实例（必须第一个注册）：二次启动时这里先跑——把已有实例唤到前台，
@@ -76,6 +92,17 @@ fn main() {
                 eprintln!("[tray] 托盘构建失败（不影响热键与查词）：{err}");
             }
             start_clipboard_watch(app.handle().clone());
+            // Windows 11：系统级圆角（阴影沿圆角绘制，圆角外不再有像素残留）
+            #[cfg(target_os = "windows")]
+            {
+                for label in ["main", "popup", "viewer"] {
+                    if let Some(w) = app.get_webview_window(label) {
+                        if let Ok(hwnd) = w.hwnd() {
+                            set_dwm_rounded_corners(hwnd.0 as isize);
+                        }
+                    }
+                }
+            }
             // 远程探针：MYDICT_DEBUG_EVAL='document.title=…' 让 popup 执行一段 JS 并把结果
             // 写进窗口标题（GUI 里没有控制台，这是从外部看 DOM 状态的唯一通道）
             for (var_name, label) in [
