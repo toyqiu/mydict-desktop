@@ -541,6 +541,10 @@ element('p-settings').addEventListener('click', () => {
 })
 
 
+window.addEventListener('unhandledrejection', (event) => {
+  void invoke('note', { tag: `[unhandled] ${String(event.reason)}` }).catch(() => undefined)
+})
+
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     if (modal.isOpen()) modal.close()

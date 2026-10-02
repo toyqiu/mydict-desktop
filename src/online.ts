@@ -7,8 +7,11 @@
  * 现象不是异常）；403 的语义是「功能未开启」而不是 Token 问题。
  */
 
+import { invoke } from '@tauri-apps/api/core'
 import type { Settings } from './api'
 import { api } from './api'
+
+const note = (tag: string) => invoke('note', { tag }).catch(() => undefined)
 import { guessSourceLang } from './translate'
 
 /** 在线伪标签的 value：不会与任何语言码冲突 */
@@ -225,7 +228,9 @@ export function mountOnlineView(
       )) as OnlineData
       cachePut(key, data)
       setData(data)
+      void note(`[online] 渲染完成 sections=${(data.sections || []).length}`)
     } catch (error) {
+      void note(`[online-err] ${String(error)}`)
       const message = String(error)
       if (message.startsWith('UNSUPPORTED:')) {
         setUnsupported()
@@ -236,6 +241,9 @@ export function mountOnlineView(
       setError(reason, () => void lookup(text))
     }
   }
+
+  // 挂载即发起首次查询（懒加载的「第一次切到该标签」就是这个时机）
+  void lookup(options.text)
 
   return {
     element: container,

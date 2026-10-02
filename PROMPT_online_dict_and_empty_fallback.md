@@ -96,6 +96,24 @@ async fn online_lookup(server_url: String, token: Option<String>, word: String, 
     if status == reqwest::StatusCode::FORBIDDEN {
         return Err("UNSUPPORTED:在线词典未开启（MyDict 管理后台 → 系统设置）".into());
     }
+    // 该端点鉴权走**网页会话 JWT**，不认 sk- API Token：带 sk- Token 必然 401。
+    // 401 且带 token 时降级为匿名重试一次（服务端开启「开放使用」时匿名可用）。
+    if status == reqwest::StatusCode::UNAUTHORIZED && token.as_deref().map_or(false, |t| !t.is_empty()) {
+        let mut retry = reqwest::Client::new()
+            .get(&url)
+            .header("Accept", "application/json")
+            .timeout(std::time::Duration::from_secs(15));
+        let resp2 = retry.send().await.map_err(|e| e.to_string())?;
+        let status2 = resp2.status();
+        let body2: serde_json::Value = resp2.json().await.map_err(|e| e.to_string())?;
+        if status2 == reqwest::StatusCode::UNAUTHORIZED {
+            return Err("UNSUPPORTED:在线词典需要网页登录或服务端开启「开放使用」，当前配置无法使用".into());
+        }
+        if !status2.is_success() {
+            return Err(format!("HTTP {}", status2));
+        }
+        return Ok(body2);
+    }
     if !status.is_success() {
         return Err(format!("HTTP {}", status));
     }

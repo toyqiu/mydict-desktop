@@ -486,3 +486,139 @@ body {
   color: var(--text-secondary);
   cursor: pointer;
 }
+
+
+/* ---------- 在线词典视图（卡片列表，popup / 主界面共用） ---------- */
+.online-host {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.online-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.online-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-soft);
+  background: var(--surface-alt);
+}
+
+.online-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.online-card-name {
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.online-open {
+  border: none;
+  background: none;
+  padding: 2px 4px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.online-open:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.online-card-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.online-card-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.online-card-text {
+  white-space: pre-wrap;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.online-card-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.online-sense {
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.online-example {
+  padding-left: 14px;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.online-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 0 8px;
+}
+
+.online-link {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-alt);
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.online-link:hover {
+  color: var(--text);
+}
+
+.online-loading,
+.online-empty {
+  padding: 14px 16px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.online-error {
+  margin-right: 10px;
+  color: var(--danger);
+}
+
+.online-retry {
+  padding: 3px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-soft);
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+/* 语言标签行是 .app 纵向 flex 的子项：在线/翻译视图内容很高时，
+   默认的 flex-shrink 会把标签行压扁（「标签挤压严重」的根因） */
+.langs {
+  flex-shrink: 0;
+}

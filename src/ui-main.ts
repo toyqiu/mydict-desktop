@@ -550,6 +550,10 @@ element('btn-theme').addEventListener('click', async () => {
 })
 
 // 键盘：Esc 收起窗口（主界面没有弹窗要管）；↑/↓ 选命中
+window.addEventListener('unhandledrejection', (event) => {
+  void invoke('note', { tag: `[unhandled] ${String(event.reason)}` }).catch(() => undefined)
+})
+
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     // 设置模态开着时先关模态，别把整个窗口收起来
