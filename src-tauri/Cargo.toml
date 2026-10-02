@@ -1,6 +1,6 @@
 [package]
 name = "mydict-desktop"
-version = "0.1.3"
+version = "0.1.4"
 description = "MyDict 的桌面查词器"
 authors = ["toyqiuwu"]
 license = "MIT"

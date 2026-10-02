@@ -46,7 +46,7 @@ export function mountSettingsModal(options: SettingsModalOptions): SettingsModal
         <div class="field-group">
           <div class="group-label">呼出热键</div>
           <label><span>组合键</span><input data-role="hotkey" type="text" placeholder="super+shift+d" /></label>
-          <p class="hint">写法：super+shift+d、ctrl+alt+d、f9…保存后立即生效；被别的程序占用时会在这里报出来。</p>
+          <p class="hint">点击输入框后直接按下组合键即可录入；也可手写 super+shift+d、ctrl+alt+d、f9 等写法。保存后立即生效；被别的程序占用时会在这里报出来。</p>
         </div>
         <div class="field-group">
           <div class="group-label">行为</div>
@@ -96,6 +96,47 @@ export function mountSettingsModal(options: SettingsModalOptions): SettingsModal
     if (event.target === mask) close()
   })
   mask.querySelector('[data-role="close"]')?.addEventListener('click', close)
+
+  // 组合键录入：聚焦「组合键」输入框后直接按下组合键即可填入。用物理键位 e.code
+  // 而不是 e.key——Windows 的中文输入法会把 keydown 的 key 改写成 'Process'，
+  // 按 e.key 记录会拿到乱码（Windows 实测「无法正常设置热键」的原因）。
+  const hotkeyInput = field<HTMLInputElement>('hotkey')
+  const KEY_NAMES: Record<string, string> = {
+    Space: 'space',
+    Enter: 'enter',
+    Tab: 'tab',
+    Backspace: 'backspace',
+    Delete: 'delete',
+    Slash: 'slash',
+    Backslash: 'backslash',
+    Comma: 'comma',
+    Period: 'period',
+    Semicolon: 'semicolon',
+    Quote: 'quote',
+    Minus: 'minus',
+    Equal: 'equal',
+    BracketLeft: 'bracketleft',
+    BracketRight: 'bracketright',
+  }
+  hotkeyInput.addEventListener('keydown', (event) => {
+    const hasMods = event.ctrlKey || event.altKey || event.shiftKey || event.metaKey
+    if (!hasMods) return // 无修饰键的按键放行：用户仍可手动输入写法
+    const mods = [
+      event.ctrlKey ? 'ctrl' : '',
+      event.altKey ? 'alt' : '',
+      event.shiftKey ? 'shift' : '',
+      event.metaKey ? 'super' : '',
+    ].filter(Boolean)
+    const code = event.code
+    let key: string | undefined = KEY_NAMES[code]
+    if (code.startsWith('Key')) key = code.slice(3).toLowerCase()
+    else if (code.startsWith('Digit')) key = code.slice(5)
+    else if (/^F([1-9]|1[0-2])$/.test(code)) key = code.toLowerCase()
+    if (!key) return // 方向键等暂不支持的主键：忽略，不覆盖已有写法
+    event.preventDefault()
+    event.stopPropagation()
+    hotkeyInput.value = [...mods, key].join('+')
+  })
 
   mask.addEventListener('submit', async (event) => {
     event.preventDefault()

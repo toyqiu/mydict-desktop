@@ -143,6 +143,8 @@ const settingsModal = mountSettingsModal({
   onSaved: (next) => {
     settings = next
     applyTheme(settings.theme)
+    // 登录/换服务器往往发生在这里：语言标签此时才拿得到（启动时未登录会失败）
+    void loadTabs()
     if (settings.hotkey) {
       hotkeyChip.textContent = settings.hotkey
       hotkeyChip.hidden = false
@@ -462,6 +464,8 @@ void listen('mydict:main-shown', () => {
 
 // 另一个窗口保存了设置：同步副本并立即换主题（此前「主界面暗色、面板亮色」就是这么来的）
 void listen<Settings>('mydict:settings-updated', (event) => {
+  // 启动时未登录会拿不到语言标签；设置保存（含登录）后补载
+  if (langTabs.length === 0) void loadTabs()
   settings = event.payload
   applyTheme(settings.theme)
   // 已挂载的词条文档同步换明暗（iframe 保留着播放位置，不能重建）

@@ -376,6 +376,8 @@ const modal = mountSettingsModal({
   onSaved: (next) => {
     settings = next
     applyTheme(settings.theme)
+    // 登录/换服务器往往发生在这里：语言标签此时才拿得到（启动时未登录会失败）
+    void loadTabs()
     // 剪贴板监听开关 Rust 侧即时生效；这里不用额外处理
   },
   onClosed: () => wordInput.focus(),
@@ -474,6 +476,8 @@ document.addEventListener('keydown', (event) => {
 void listen('mydict:shown', () => {
   // 呼出时把光标放进输入框（划词模式不会走到这里，见 Rust 侧）
   wordInput.focus()
+  // 启动时未登录会拿不到语言标签；登录后第一次呼出时补载
+  if (langTabs.length === 0) void loadTabs()
   wordInput.select()
 })
 
