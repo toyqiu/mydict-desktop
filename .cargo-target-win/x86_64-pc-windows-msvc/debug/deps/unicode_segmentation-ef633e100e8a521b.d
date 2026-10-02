@@ -1,9 +1,0 @@
-/vol1/1000/docker/mydict-desktop/.cargo-target-win/x86_64-pc-windows-msvc/debug/deps/unicode_segmentation-ef633e100e8a521b.d: /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/lib.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/grapheme.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/sentence.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/word.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/tables.rs
-
-/vol1/1000/docker/mydict-desktop/.cargo-target-win/x86_64-pc-windows-msvc/debug/deps/libunicode_segmentation-ef633e100e8a521b.rmeta: /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/lib.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/grapheme.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/sentence.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/word.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/tables.rs
-
-/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/lib.rs:
-/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/grapheme.rs:
-/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/sentence.rs:
-/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/word.rs:
-/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/unicode-segmentation-1.13.3/src/tables.rs:

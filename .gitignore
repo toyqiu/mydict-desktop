@@ -5,3 +5,4 @@ src-tauri/gen/
 .cargo-target/
 *.log
 .DS_Store
+.cargo-target-win/

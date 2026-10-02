@@ -1,2 +1,0 @@
-cargo:rustc-link-search=native=/vol1/1000/docker/mydict-desktop/.cargo-target-win/x86_64-pc-windows-msvc/debug/build/webview2-com-sys-4beb3c0a14a06b5c/out/x64
-cargo:rustc-link-lib=advapi32
