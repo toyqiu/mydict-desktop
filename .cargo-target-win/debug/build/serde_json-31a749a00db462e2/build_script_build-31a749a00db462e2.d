@@ -1,0 +1,5 @@
+/vol1/1000/docker/mydict-desktop/.cargo-target-win/debug/build/serde_json-31a749a00db462e2/build_script_build-31a749a00db462e2.d: /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/serde_json-1.0.151/build.rs
+
+/vol1/1000/docker/mydict-desktop/.cargo-target-win/debug/build/serde_json-31a749a00db462e2/build_script_build-31a749a00db462e2: /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/serde_json-1.0.151/build.rs
+
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/serde_json-1.0.151/build.rs:

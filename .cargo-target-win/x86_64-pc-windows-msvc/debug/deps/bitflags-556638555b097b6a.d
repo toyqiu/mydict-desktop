@@ -1,0 +1,12 @@
+/vol1/1000/docker/mydict-desktop/.cargo-target-win/x86_64-pc-windows-msvc/debug/deps/bitflags-556638555b097b6a.d: /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/lib.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/iter.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/parser.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/traits.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/public.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/internal.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/external.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/external/serde.rs
+
+/vol1/1000/docker/mydict-desktop/.cargo-target-win/x86_64-pc-windows-msvc/debug/deps/libbitflags-556638555b097b6a.rmeta: /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/lib.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/iter.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/parser.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/traits.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/public.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/internal.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/external.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/external/serde.rs
+
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/lib.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/iter.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/parser.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/traits.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/public.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/internal.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/external.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/bitflags-2.13.2/src/external/serde.rs:

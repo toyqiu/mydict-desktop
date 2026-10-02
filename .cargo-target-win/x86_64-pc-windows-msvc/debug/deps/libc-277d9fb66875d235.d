@@ -1,0 +1,13 @@
+/vol1/1000/docker/mydict-desktop/.cargo-target-win/x86_64-pc-windows-msvc/debug/deps/libc-277d9fb66875d235.d: /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/lib.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/macros.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/new/mod.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/new/common/mod.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/new/ucrt/mod.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/primitives.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/windows/mod.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/windows/msvc/mod.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/types.rs
+
+/vol1/1000/docker/mydict-desktop/.cargo-target-win/x86_64-pc-windows-msvc/debug/deps/liblibc-277d9fb66875d235.rmeta: /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/lib.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/macros.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/new/mod.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/new/common/mod.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/new/ucrt/mod.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/primitives.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/windows/mod.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/windows/msvc/mod.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/types.rs
+
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/lib.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/macros.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/new/mod.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/new/common/mod.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/new/ucrt/mod.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/primitives.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/windows/mod.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/windows/msvc/mod.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/libc-0.2.189/src/types.rs:

@@ -1,0 +1,14 @@
+/vol1/1000/docker/mydict-desktop/.cargo-target-win/x86_64-pc-windows-msvc/debug/deps/uuid-87dd191af5d25a3f.d: /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/lib.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/macros.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/builder.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/error.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/non_nil.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/parser.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/fmt.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/timestamp.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/external.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/external/serde_support.rs
+
+/vol1/1000/docker/mydict-desktop/.cargo-target-win/x86_64-pc-windows-msvc/debug/deps/libuuid-87dd191af5d25a3f.rmeta: /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/lib.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/macros.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/builder.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/error.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/non_nil.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/parser.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/fmt.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/timestamp.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/external.rs /root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/external/serde_support.rs
+
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/lib.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/macros.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/builder.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/error.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/non_nil.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/parser.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/fmt.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/timestamp.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/external.rs:
+/root/.cargo/registry/src/mirrors.ustc.edu.cn-38d0e5eb5da2abae/uuid-1.26.1/src/external/serde_support.rs:
