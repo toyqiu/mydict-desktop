@@ -52,53 +52,6 @@ fn set_dwm_rounded_corners(hwnd: isize) {
     }
 }
 
-/// Windows 圆角工具：Win11 走 DWM 圆角，Win10 降级为 SetWindowRgn 区域裁剪
-/// （区域外的像素——方形阴影/边缘残留——被系统直接裁掉；代价是 DWM 阴影消失）。
-#[cfg(target_os = "windows")]
-mod win_rounding {
-    use std::sync::atomic::AtomicBool;
-
-    /// true = 当前系统不支持 DWM 圆角（Win10），需要用区域裁剪
-    pub static USE_REGION: AtomicBool = AtomicBool::new(false);
-
-    #[link(name = "dwmapi")]
-    extern "system" {
-        fn DwmSetWindowAttribute(hwnd: isize, attr: u32, value: *const u32, size: u32) -> i32;
-    }
-    #[link(name = "user32")]
-    extern "system" {
-        fn SetWindowRgn(hwnd: isize, rgn: isize, redraw: i32) -> i32;
-    }
-    #[link(name = "gdi32")]
-    extern "system" {
-        fn CreateRoundRectRgn(left: i32, top: i32, right: i32, bottom: i32, w: i32, h: i32)
-            -> isize;
-    }
-
-    const DWMWA_WINDOW_CORNER_PREFERENCE: u32 = 33;
-    const DWMWCP_ROUND: u32 = 2;
-
-    /// 尝试 Win11 DWM 圆角；返回是否支持（Win10 返回 false）
-    pub fn try_dwm_round(hwnd: isize) -> bool {
-        unsafe {
-            let pref: u32 = DWMWCP_ROUND;
-            DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &pref, 4) == 0
-        }
-    }
-
-    /// 把窗口裁成圆角矩形（width/height/radius_d 均为物理像素）
-    pub fn apply_round_region(hwnd: isize, width: i32, height: i32, radius_d: i32) {
-        if hwnd == 0 {
-            return;
-        }
-        unsafe {
-            let rgn = CreateRoundRectRgn(0, 0, width + 1, height + 1, radius_d, radius_d);
-            if rgn != 0 {
-                SetWindowRgn(hwnd, rgn, 1);
-            }
-        }
-    }
-}
 
 /// 翻译：Edge 免 key 接口（无鉴权）。body 是裸 JSON 字符串数组；UA 必须伪装 Edge
 /// 否则可能 403。与词典链路互不依赖——MyDict 不可达时翻译照常工作。
@@ -150,6 +103,44 @@ async fn translate(
         .unwrap_or_default())
 }
 
+/// 在线词典（Wikipedia/Wiktionary/百度百科聚合，服务端纯文本化 + 600s 缓存）。
+///
+/// 403 的语义是「服务端 online_dict_enabled 未开启」而不是鉴权失败——错误串以
+/// `UNSUPPORTED:` 前缀开头，前端据此显示「未开启」文案。
+#[tauri::command]
+async fn online_lookup(
+    server_url: String,
+    token: Option<String>,
+    word: String,
+    lang: String,
+) -> Result<serde_json::Value, String> {
+    let url = format!(
+        "{}/api/dict/online/lookup?word={}&lang={}",
+        server_url.trim_end_matches('/'),
+        mydict::urlencode(&word),
+        mydict::urlencode(&lang)
+    );
+    let mut req = reqwest::Client::new()
+        .get(&url)
+        .header("Accept", "application/json")
+        .timeout(std::time::Duration::from_secs(15));
+    if let Some(t) = token.as_deref() {
+        if !t.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", t));
+        }
+    }
+    let resp = req.send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+    let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    if status == reqwest::StatusCode::FORBIDDEN {
+        return Err("UNSUPPORTED:在线词典未开启（MyDict 管理后台 → 系统设置）".into());
+    }
+    if !status.is_success() {
+        return Err(format!("HTTP {}", status));
+    }
+    Ok(body)
+}
+
 fn main() {
     tauri::Builder::default()
         // 单实例（必须第一个注册）：二次启动时这里先跑——把已有实例唤到前台，
@@ -196,32 +187,9 @@ fn main() {
                 for label in ["main", "popup", "viewer"] {
                     if let Some(w) = app.get_webview_window(label) {
                         if let Ok(hwnd) = w.hwnd() {
-                            // Win11：DWM 系统级圆角（支持阴影）
-                            if win_rounding::try_dwm_round(hwnd.0 as isize) {
-                                continue;
-                            }
-                        }
-                        // Win10：DWM 圆角属性不可用 → 降级为窗口区域裁剪
-                        win_rounding::USE_REGION.store(true, std::sync::atomic::Ordering::Relaxed);
-                    }
-                }
-                if win_rounding::USE_REGION.load(std::sync::atomic::Ordering::Relaxed) {
-                    for label in ["main", "popup", "viewer"] {
-                        if let Some(w) = app.get_webview_window(label) {
-                            if let (Ok(hwnd), Ok(size), Ok(scale)) =
-                                (w.hwnd(), w.outer_size(), w.scale_factor())
-                            {
-                                let d = (10.0 * 2.0 * scale).round() as i32;
-                                win_rounding::apply_round_region(
-                                    hwnd.0 as isize,
-                                    size.width as i32,
-                                    size.height as i32,
-                                    d,
-                                );
-                            }
+                            set_dwm_rounded_corners(hwnd.0 as isize);
                         }
                     }
-                    eprintln!("[rounding] Win10 区域裁剪模式");
                 }
             }
             // 远程探针：MYDICT_DEBUG_EVAL='document.title=…' 让 popup 执行一段 JS 并把结果
@@ -265,26 +233,6 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Win10 区域裁剪模式：窗口每次缩放都要按新尺寸重裁圆角区域
-            #[cfg(target_os = "windows")]
-            {
-                if matches!(event, tauri::WindowEvent::Resized(_))
-                    && matches!(window.label(), "main" | "popup" | "viewer")
-                    && win_rounding::USE_REGION.load(std::sync::atomic::Ordering::Relaxed)
-                {
-                    if let (Ok(hwnd), Ok(size), Ok(scale)) =
-                        (window.hwnd(), window.outer_size(), window.scale_factor())
-                    {
-                        let d = (10.0 * 2.0 * scale).round() as i32;
-                        win_rounding::apply_round_region(
-                            hwnd.0 as isize,
-                            size.width as i32,
-                            size.height as i32,
-                            d,
-                        );
-                    }
-                }
-            }
             // 快捷搜索窗的移动/缩放：记住上一次的尺寸与位置。拖动会连续触发事件，
             // 这里只记最新值并交给防抖线程，静止 600ms 后落盘一次。
             if window.label() != "popup" {
@@ -333,6 +281,7 @@ fn main() {
             show_viewer,
             close_viewer,
             translate,
+            online_lookup,
         ])
         .run(tauri::generate_context!())
         .expect("应用启动失败");

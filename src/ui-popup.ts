@@ -41,6 +41,7 @@ import {
   mountTranslateView,
   type TranslateView,
 } from './translate'
+import { ONLINE_TAB, mountOnlineView, type OnlineView } from './online'
 
 const element = <T extends HTMLElement>(id: string): T => {
   const found = document.getElementById(id)
@@ -68,6 +69,7 @@ app.innerHTML = `
 
     <div class="acc" id="p-acc"></div>
     <div class="trans-host" id="p-trans" hidden></div>
+    <div class="online-host" id="p-online" hidden></div>
 
     <footer class="popfoot">
       <span class="status-inline" id="p-status"></span>
@@ -82,6 +84,15 @@ const langsRow = element('p-langs')
 const transHost = element('p-trans')
 let queryIsTranslate = false
 let translateView: TranslateView | null = null
+const onlineHost = element('p-online')
+let onlineView: OnlineView | null = null
+
+/** 三块面板互斥显示：词典分组 / 翻译视图 / 在线词典视图 */
+function showPane(name: 'acc' | 'trans' | 'online'): void {
+  accHost.hidden = name !== 'acc'
+  transHost.hidden = name !== 'trans'
+  onlineHost.hidden = name !== 'online'
+}
 const accHost = element('p-acc')
 const statusBox = element('p-status')
 
@@ -129,6 +140,7 @@ function renderTabs(): void {
   const chips = [
     { lang: '', label: '全部', dictIds: [] as number[] },
     ...langTabs,
+    { lang: ONLINE_TAB, label: '在线', dictIds: [] as number[] },
     { lang: TRANSLATE_TAB, label: '翻译', dictIds: [] as number[] },
   ]
   const existing = [...langsRow.children] as HTMLElement[]
@@ -320,10 +332,10 @@ function renderAccordion(): void {
       return `
       <div class="acc-item ${expanded ? 'expanded' : ''}" data-key="${group.key}">
         <button class="acc-head" data-key="${group.key}">
+          <span class="dict">${escapeHtml(group.dictionaryName)}</span>
           <span class="word">${escapeHtml(group.word)}</span>
           ${group.phonetic ? `<span class="phonetic">${escapeHtml(group.phonetic)}</span>` : ''}
           ${group.entries.length > 1 ? `<span class="entries-count">共 ${group.entries.length} 条</span>` : ''}
-          <span class="dict">${escapeHtml(group.dictionaryName)}</span>
           <span class="chev">${expanded ? '▾' : '▸'}</span>
         </button>
         <div class="acc-body" data-body="${group.key}"></div>
@@ -348,13 +360,33 @@ function escapeHtml(raw: string): string {
 
 /* ---------- 搜索 ---------- */
 
+/** 进入在线词典视图：懒加载（缓存命中秒回） */
+function enterOnlineView(text: string): void {
+  queryIsTranslate = false
+  activeScope = ONLINE_TAB
+  renderTabs()
+  showPane('online')
+  if (!onlineView) {
+    onlineView = mountOnlineView(onlineHost, {
+      settings,
+      getToken: () => {
+        // token 在 Rust 侧持久化，前端拿不到明文——online_lookup 的 token 传空，
+        // 该端点无鉴权也可用（有 token 只是配额归属不同）
+        return ''
+      },
+      text,
+    })
+  } else {
+    onlineView.lookup(text)
+  }
+}
+
 /** 进入翻译视图：词典分组隐藏，译文懒加载；词典查询不做（切回词典标签时才查） */
 function enterTranslateView(text: string): void {
   queryIsTranslate = true
   activeScope = TRANSLATE_TAB
   renderTabs()
-  accHost.hidden = true
-  transHost.hidden = false
+  showPane('trans')
   if (!translateView) {
     translateView = mountTranslateView(transHost, {
       text,
@@ -373,8 +405,7 @@ function leaveTranslateView(): void {
     activeScope = ''
     renderTabs()
   }
-  accHost.hidden = false
-  transHost.hidden = true
+  showPane('acc')
 }
 
 async function runSearch(next: string): Promise<void> {
@@ -388,7 +419,13 @@ async function runSearch(next: string): Promise<void> {
     setStatus('')
     return
   }
-  leaveTranslateView()
+  queryIsTranslate = false
+  // 伪标签（翻译/在线）不应在词典查询里保持高亮，切回「全部」
+  if (activeScope === TRANSLATE_TAB || activeScope === ONLINE_TAB) {
+    activeScope = ''
+    renderTabs()
+  }
+  showPane('acc')
   setStatus('查询中…')
   expandedKey = null
   try {
@@ -472,6 +509,13 @@ langsRow.addEventListener('click', (event) => {
   if (!chip) return
   const lang = chip.dataset.lang ?? ''
   if (lang === activeScope) return
+  if (lang === ONLINE_TAB) {
+    // 在线伪标签：直进在线词典视图（懒加载，绕过词典查询）
+    activeScope = ONLINE_TAB
+    renderTabs()
+    if (queryWord) enterOnlineView(queryWord)
+    return
+  }
   if (lang === TRANSLATE_TAB) {
     // 翻译伪标签：直进翻译视图（绕过线路判定——任何查询都能一键看译文）
     activeScope = TRANSLATE_TAB
@@ -511,7 +555,7 @@ document.addEventListener('keydown', (event) => {
     // 循环序列 = 语言标签 + 末尾的翻译标签；「全部」只是点击用的重置位，不参与循环
     if (langTabs.length === 0 && !queryWord) return
     event.preventDefault()
-    const ordered = [...langTabs, { lang: TRANSLATE_TAB }]
+    const ordered = [...langTabs, { lang: ONLINE_TAB }, { lang: TRANSLATE_TAB }]
     const delta = event.key === 'ArrowRight' ? 1 : -1
     const at = ordered.findIndex((t) => t.lang === activeScope)
     const next = ordered[(((at + delta) % ordered.length) + ordered.length) % ordered.length]
@@ -519,6 +563,12 @@ document.addEventListener('keydown', (event) => {
       activeScope = TRANSLATE_TAB
       renderTabs()
       if (queryWord) enterTranslateView(queryWord)
+      return
+    }
+    if (next.lang === ONLINE_TAB) {
+      activeScope = ONLINE_TAB
+      renderTabs()
+      if (queryWord) enterOnlineView(queryWord)
       return
     }
     activeScope = next.lang

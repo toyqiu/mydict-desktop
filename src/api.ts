@@ -62,4 +62,7 @@ export const api = {
   /** Edge 免 key 翻译：texts 与返回译文顺序一一对应；from 传 null 即自动检测 */
   translate: (texts: string[], from: string | null, to: string) =>
     invoke<string[]>('translate', { texts, from, to }),
+  /** 在线词典聚合（Wikipedia/Wiktionary/百度百科，服务端纯文本化）。403=功能未开启 */
+  onlineLookup: (serverUrl: string, token: string | null, word: string, lang: string) =>
+    invoke<unknown>('online_lookup', { serverUrl, token: token ?? null, word, lang }),
 }

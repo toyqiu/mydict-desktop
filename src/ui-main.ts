@@ -11,6 +11,7 @@ import {
   mountTranslateView,
   type TranslateView,
 } from './translate'
+import { ONLINE_TAB, mountOnlineView, type OnlineView } from './online'
 import './theme.css'
 import './styles.css'
 
@@ -63,6 +64,7 @@ app.innerHTML = `
     </main>
 
     <div class="trans-host" id="trans" hidden></div>
+    <div class="online-host" id="online" hidden></div>
 
     <div class="batch-nav" id="batch-nav" hidden>
       <button type="button" data-batch="prev">‹ 上一批</button>
@@ -94,6 +96,25 @@ const langsRow = element<HTMLDivElement>('langs')
 const transHost = element<HTMLDivElement>('trans')
 let queryIsTranslate = false
 let translateView: TranslateView | null = null
+const onlineHost = element<HTMLDivElement>('online')
+let onlineView: OnlineView | null = null
+
+/** 三块面板互斥显示：结果区 / 翻译视图 / 在线词典视图 */
+function showPane(name: 'results' | 'trans' | 'online'): void {
+  transHost.hidden = name !== 'trans'
+  onlineHost.hidden = name !== 'online'
+  // 结果区的显隐与空态逻辑耦合，单独处理
+  if (name === 'results') {
+    if (groups.length === 0) {
+      showEmpty(true)
+      setEmptyContent('没有词典收录这个词', '也可以改走翻译线路，或换个词试试。', '翻译')
+    } else {
+      showEmpty(false)
+    }
+  } else {
+    showEmpty(false)
+  }
+}
 const settingsHost = element('settings-host')
 
 let settings: Settings = {
@@ -208,6 +229,7 @@ function renderTabs(): void {
   const chips = [
     { lang: '', label: '全部', dictIds: [] as number[] },
     ...langTabs,
+    { lang: ONLINE_TAB, label: '在线', dictIds: [] as number[] },
     { lang: TRANSLATE_TAB, label: '翻译', dictIds: [] as number[] },
   ]
   const existing = [...langsRow.children] as HTMLElement[]
@@ -307,13 +329,30 @@ function renderHits() {
     .map(
       (group, index) => `
       <li class="hit ${index === activeIndex ? 'active' : ''}" data-index="${index}">
+        <span class="dict ${group.entries.some((item) => item.lang_match === false) ? 'fallback' : ''}">${escapeHtml(group.dictionaryName)}</span>
         <span class="word">${escapeHtml(group.word)}</span>
         ${group.phonetic ? `<span class="phonetic">${escapeHtml(group.phonetic)}</span>` : ''}
-        <span class="dict ${group.entries.some((item) => item.lang_match === false) ? 'fallback' : ''}">${escapeHtml(group.dictionaryName)}</span>
         ${group.entries.length > 1 ? `<span class="entries-count">共 ${group.entries.length} 条</span>` : ''}
       </li>`,
     )
     .join('')
+}
+
+/** 进入在线词典视图（主界面）：懒加载（缓存命中秒回） */
+function enterOnlineView(text: string): void {
+  queryIsTranslate = false
+  activeScope = ONLINE_TAB
+  renderTabs()
+  showPane('online')
+  if (!onlineView) {
+    onlineView = mountOnlineView(onlineHost, {
+      settings,
+      getToken: () => '',
+      text,
+    })
+  } else {
+    onlineView.lookup(text)
+  }
 }
 
 /** 进入翻译视图（主界面）：结果区隐藏，翻译视图懒加载 */
@@ -321,8 +360,7 @@ function enterTranslateView(text: string): void {
   queryIsTranslate = true
   activeScope = TRANSLATE_TAB
   renderTabs()
-  resultsPane.hidden = true
-  transHost.hidden = false
+  showPane('trans')
   if (!translateView) {
     translateView = mountTranslateView(transHost, {
       text,
@@ -341,8 +379,7 @@ function leaveTranslateView(): void {
     activeScope = ''
     renderTabs()
   }
-  transHost.hidden = true
-  resultsPane.hidden = false
+  showPane('results')
 }
 
 async function runSearch(next: string) {
@@ -356,7 +393,13 @@ async function runSearch(next: string) {
     setStatus('')
     return
   }
-  leaveTranslateView()
+  queryIsTranslate = false
+  // 伪标签（翻译/在线）不应在词典查询里保持高亮，切回「全部」
+  if (activeScope === TRANSLATE_TAB || activeScope === ONLINE_TAB) {
+    activeScope = ''
+    renderTabs()
+  }
+  showPane('results')
   // 不显示「查询中…」：状态条隐现（带边框底色的一整条）会让结果区上下弹跳——
   // 切语言标签时这就是用户看到的闪动。本地查询毫秒级，完成前保留旧内容即可。
   try {
@@ -367,7 +410,21 @@ async function runSearch(next: string) {
       hitsList.innerHTML = ''
       entryHost.innerHTML = ''
       showEmpty(true)
-      setEmptyContent(`没有找到「${trimmed}」`, '换个词试试，或者在设置里检查检索范围与账号。', null)
+      if (isTranslateCandidate(trimmed)) {
+        // 明显是句子/长短语：自动切翻译（视图先立起来，不打断）
+        setEmptyContent(`没有词典收录「${trimmed}」`, '已切换到翻译线路。', null)
+        setStatus(`没有词典收录「${trimmed}」，已切换到翻译`)
+        enterTranslateView(trimmed)
+      } else {
+        // 短词查不到是常态：留在错误页，给「翻译」手动出口
+        setEmptyContent('没有词典收录这个词', '也可以改走翻译线路。', '翻译')
+        const cta = element<HTMLButtonElement>('empty-cta')
+        const onCta = () => {
+          cta.removeEventListener('click', onCta)
+          enterTranslateView(trimmed)
+        }
+        cta.addEventListener('click', onCta)
+      }
       setStatus('')
       return
     }
@@ -450,6 +507,13 @@ langsRow.addEventListener('click', (event) => {
   if (!chip) return
   const lang = chip.dataset.lang ?? ''
   if (lang === activeScope) return
+  if (lang === ONLINE_TAB) {
+    // 在线伪标签：直进在线词典视图（懒加载，绕过词典查询）
+    activeScope = ONLINE_TAB
+    renderTabs()
+    if (queryWord) enterOnlineView(queryWord)
+    return
+  }
   if (lang === TRANSLATE_TAB) {
     // 翻译伪标签：直进翻译视图（绕过线路判定——任何查询都能一键看译文）
     activeScope = TRANSLATE_TAB
