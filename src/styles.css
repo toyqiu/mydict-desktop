@@ -267,9 +267,8 @@ body {
   font-size: 0.72rem;
 }
 
-/* 词典名做成胶囊 */
+/* 词典名做成胶囊（在命中词之前、靠左） */
 .hit .dict {
-  margin-left: auto;
   max-width: 46%;
   padding: 1px 8px;
   border: 1px solid var(--border-soft);
