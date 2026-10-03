@@ -146,11 +146,26 @@ async fn online_lookup(
 /// Windows release 的 stderr 是无效句柄（windows_subsystem="windows"），eprintln! 与
 /// panic 信息全部丢失——「双击图标没反应、任务管理器没进程」这类启动期问题必须靠
 /// 文件日志定位。crate::startup_log 在拿到 app_config_dir 之前也能用（自行拼路径）。
+/// 与 tauri 的 app_config_dir 同路径：{config_dir}/{identifier}。
+/// 在 Builder 启动前就要用（state 提前 manage，见 main），不能依赖 app handle。
+fn manual_app_config_dir() -> PathBuf {
+    #[cfg(target_os = "windows")]
+    let base = std::env::var("APPDATA").map(PathBuf::from);
+    #[cfg(not(target_os = "windows"))]
+    let base = std::env::var("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|_| {
+            std::env::var("HOME").map(|h| PathBuf::from(h).join(".config"))
+        });
+    base.unwrap_or_else(|_| PathBuf::from("."))
+        .join("com.toyqiu.mydict.desktop")
+}
+
 pub(crate) fn startup_log(msg: &str) {
     use std::io::Write;
-    let dir = std::env::var("APPDATA")
-        .map(|base| std::path::PathBuf::from(base).join("com.toyqiu.mydict.desktop"))
-        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    // 统一写配置目录（Windows=APPDATA，Linux=XDG/HOME/.config）——与启动方式无关，
+    // 否则菜单/图标启动的实例 stderr 落不到同一个日志，诊断信息直接丢失
+    let dir = manual_app_config_dir();
     let millis = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
@@ -166,20 +181,6 @@ pub(crate) fn startup_log(msg: &str) {
     }
 }
 
-/// 与 tauri 的 app_config_dir 同路径：{config_dir}/{identifier}。
-/// 在 Builder 启动前就要用（state 提前 manage，见 main），不能依赖 app handle。
-fn manual_app_config_dir() -> PathBuf {
-    #[cfg(target_os = "windows")]
-    let base = std::env::var("APPDATA").map(PathBuf::from);
-    #[cfg(not(target_os = "windows"))]
-    let base = std::env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|_| {
-            std::env::var("HOME").map(|h| PathBuf::from(h).join(".config"))
-        });
-    base.unwrap_or_else(|_| PathBuf::from("."))
-        .join("com.toyqiu.mydict.desktop")
-}
 
 fn main() {
     startup_log(&format!("main() 进入 v{}（本次启动属于这个版本的二进制）", env!("CARGO_PKG_VERSION")));
@@ -213,7 +214,7 @@ fn main() {
                 state.set_window_visible(true);
                 let _ = window.set_focus();
                 let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
-                eprintln!("[single-instance] 二次启动 → 已唤起现有实例");
+                startup_log("[single-instance] 二次启动 → 已唤起现有实例");
                 startup_log("[single-instance] 二次启动 → 已唤起现有实例");
             }
         }))
@@ -395,7 +396,7 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| {
             let id = event.id().as_ref().to_string();
-            eprintln!("[menu] 触发：{id}");
+            startup_log(&format!("[menu] 触发：{id}"));
             // 菜单 activate 回调跑在主线程（GTK）：在这里直接做窗口操作会与菜单的
             // deactivation 重入，实测会把 libappindicator 的菜单服务搞死——之后宿主
             // 再也弹不出菜单。全部动作派发到独立线程，回调立即返回。
@@ -405,7 +406,7 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 "main" => show_main(&app),
                 "settings" => {
                     if let Some(window) = app.get_webview_window("popup") {
-                        eprintln!("[tray] settings → show popup");
+                        startup_log("[tray] settings → show popup");
                         let _ = window.show();
                         app.state::<AppState>().set_window_visible(true);
                         let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
@@ -598,7 +599,7 @@ fn toggle_window(app: &tauri::AppHandle) {
     let state = app.state::<AppState>();
     let visible = state.is_window_visible();
     if visible {
-        eprintln!("[hotkey] 可见 → 收起");
+        startup_log("[hotkey] 可见 → 收起");
         let _ = window.hide();
         state.set_window_visible(false);
         let _ = app.emit_to("popup", "mydict:hidden", ());
@@ -622,10 +623,10 @@ fn toggle_window(app: &tauri::AppHandle) {
         None => place_near_cursor(&window),
     }
     state.set_window_visible(true);
-    eprintln!(
+    startup_log(&format!(
         "[hotkey] 呼出（{}）",
         if selected.is_empty() { "普通模式" } else { "划词模式" }
-    );
+    ));
 
     // 两种模式都聚焦输入框（前端收到 shown 后 focus+select）：用户要的是「呼出即可编辑」。
     // 曾经划词模式把焦点还给原窗口，结果 PRIMARY 里有陈旧选区时每次呼出都走划词、
@@ -710,10 +711,10 @@ fn start_clipboard_watch(app: tauri::AppHandle) {
                 continue;
             }
             last = trimmed.clone();
-            eprintln!(
+            startup_log(&format!(
                 "[clipboard] visible={visible} 命中新文本：{}",
                 &trimmed.chars().take(12).collect::<String>()
-            );
+            ));
             let _ = app.emit_to("popup", "mydict:word", trimmed);
         }
     });
