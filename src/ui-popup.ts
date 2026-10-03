@@ -431,8 +431,22 @@ async function runSearch(next: string): Promise<void> {
   try {
     hits = await api.search(trimmed, scopeDictIds())
     if (hits.length === 0) {
+      // 0 命中必须清空旧结果：否则上一个查询的分组列表残留（例：なるほど 日文命中，
+      // 切到中文/英文标签返回空，日文列表还挂在下面——用户实测 v0.3.3）
+      hits = []
+      groups = []
+      expandedKey = null
+      batchIndex = 0
+      for (const [, frame] of frames) frame.destroy()
+      frames.clear()
       renderAccordion()
-      setStatus(`没有找到「${trimmed}」`)
+      if (isTranslateCandidate(trimmed)) {
+        // 明显是句子/长短语：自动切翻译（与主界面同一策略）
+        setStatus(`没有词典收录「${trimmed}」，已切换到翻译`)
+        enterTranslateView(trimmed)
+      } else {
+        setStatus(`没有词典收录「${trimmed}」；可点「翻译」标签看译文`)
+      }
       return
     }
     // 新查询从顶部开始看，否则沿用上一次的滚动位置，新词条可能整个落在视口之外
@@ -445,6 +459,13 @@ async function runSearch(next: string): Promise<void> {
     const first = groups[0]
     if (first) await loadEntry(first)
   } catch (error) {
+    hits = []
+    groups = []
+    expandedKey = null
+    batchIndex = 0
+    for (const [, frame] of frames) frame.destroy()
+    frames.clear()
+    renderAccordion()
     setStatus(String(error), 'error')
   }
 }
