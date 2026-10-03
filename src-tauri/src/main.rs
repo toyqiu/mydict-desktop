@@ -405,6 +405,7 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 "main" => show_main(&app),
                 "settings" => {
                     if let Some(window) = app.get_webview_window("popup") {
+                        eprintln!("[tray] settings → show popup");
                         let _ = window.show();
                         app.state::<AppState>().set_window_visible(true);
                         let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: true });
@@ -709,6 +710,10 @@ fn start_clipboard_watch(app: tauri::AppHandle) {
                 continue;
             }
             last = trimmed.clone();
+            eprintln!(
+                "[clipboard] visible={visible} 命中新文本：{}",
+                &trimmed.chars().take(12).collect::<String>()
+            );
             let _ = app.emit_to("popup", "mydict:word", trimmed);
         }
     });
