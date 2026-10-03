@@ -692,7 +692,9 @@ fn start_clipboard_watch(app: tauri::AppHandle) {
                 let state = app.state::<AppState>();
                 (state.settings().clipboard_watch, state.is_window_visible())
             };
-            if !enabled {
+            // 用户口径（v0.3.1）：剪贴板监听**只在面板已显示时生效**——
+            // 面板收起时复制不做任何事，绝不主动呼出面板
+            if !enabled || !visible {
                 continue;
             }
             #[cfg(all(unix, not(target_os = "macos")))]
@@ -707,25 +709,7 @@ fn start_clipboard_watch(app: tauri::AppHandle) {
                 continue;
             }
             last = trimmed.clone();
-            if visible {
-                let _ = app.emit_to("popup", "mydict:word", trimmed);
-                continue;
-            }
-            if let Some(window) = app.get_webview_window("popup") {
-                let _ = window.show();
-                match app.state::<AppState>().popup_geometry() {
-                    Some(geometry) => {
-                        let _ = window
-                            .set_size(tauri::PhysicalSize::new(geometry.width, geometry.height));
-                        let _ = window
-                            .set_position(tauri::PhysicalPosition::new(geometry.x, geometry.y));
-                    }
-                    None => place_near_cursor(&window),
-                }
-                app.state::<AppState>().set_window_visible(true);
-                let _ = app.emit_to("popup", "mydict:word", trimmed);
-                let _ = app.emit_to("popup", "mydict:shown", ShownPayload { focused: false });
-            }
+            let _ = app.emit_to("popup", "mydict:word", trimmed);
         }
     });
 }

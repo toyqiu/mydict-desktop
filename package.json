@@ -1,7 +1,7 @@
 {
   "name": "mydict-desktop",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "description": "MyDict 的桌面查词器：全局热键呼出搜索框，复用 MyDict 的词条渲染",
   "license": "MIT",

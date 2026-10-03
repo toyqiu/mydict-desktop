@@ -52,7 +52,7 @@ export function mountSettingsModal(options: SettingsModalOptions): SettingsModal
           <div class="group-label">行为</div>
           <label class="switch"><input type="checkbox" data-role="hide-blur" /><span>失焦自动收起（快捷搜索窗）</span></label>
           <label class="switch"><input type="checkbox" data-role="selection" /><span>划词优先：有选中文字时直接查它</span></label>
-          <label class="switch"><input type="checkbox" data-role="clipboard" /><span>剪贴板监听：复制文字自动查（只认 ≤60 字的文本）</span></label>
+          <label class="switch"><input type="checkbox" data-role="clipboard" /><span>剪贴板监听：面板显示时，复制文字立即在面板中查询（≤60 字；面板收起时不监听）</span></label>
         </div>
         <div class="field-group">
           <div class="group-label">翻译</div>
