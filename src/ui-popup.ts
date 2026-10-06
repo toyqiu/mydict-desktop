@@ -12,6 +12,11 @@ import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { api, type Hit, type Settings } from './api'
 import { createEntryFrame, type EntryFrame } from './entry-frame'
+import {
+  mountImageLightbox,
+  type ImageLightbox,
+  type LightboxPayload,
+} from './image-lightbox'
 import { mountSettingsModal } from './settings-modal'
 import './theme.css'
 import './popup.css'
@@ -63,6 +68,7 @@ app.innerHTML = `
 
     <form class="search" id="p-form">
       <input id="p-word" type="text" placeholder="输入词语，Enter 查询" autocomplete="off" spellcheck="false" />
+      <button type="button" class="search-clear" id="p-clear" title="清空" hidden>✕</button>
     </form>
 
     <nav class="langs" id="p-langs"></nav>
@@ -71,13 +77,15 @@ app.innerHTML = `
     <div class="trans-host" id="p-trans" hidden></div>
     <div class="online-host" id="p-online" hidden></div>
 
-    <footer class="popfoot">
+    <footer class="popfoot" id="p-foot">
       <span class="status-inline" id="p-status"></span>
     </footer>
   </div>
 
-  <!-- 移动端右下角操作：切换明暗 + 设置（桌面用顶栏，见 IS_MOBILE 分支） -->
+  <!-- 移动端右下角操作：命中上/下一条 + 切换明暗 + 设置（桌面用顶栏与 ↑/↓ 键，见 IS_MOBILE 分支） -->
   <div class="fab" id="p-fab" hidden>
+    <button type="button" class="fab-btn" id="p-hit-prev" title="上一条命中">↑</button>
+    <button type="button" class="fab-btn" id="p-hit-next" title="下一条命中">↓</button>
     <button type="button" class="fab-btn" id="p-theme" title="切换明暗">◐</button>
     <button type="button" class="fab-btn" id="p-fab-settings" title="设置">⚙</button>
   </div>
@@ -86,6 +94,18 @@ app.innerHTML = `
 `
 
 const wordInput = element<HTMLInputElement>('p-word')
+const clearBtn = element<HTMLButtonElement>('p-clear')
+/** 有内容才显示「清空」按钮（避免空框旁边永远挂个 ✕） */
+const syncClear = (): void => {
+  clearBtn.hidden = !wordInput.value
+}
+wordInput.addEventListener('input', syncClear)
+clearBtn.addEventListener('click', () => {
+  wordInput.value = ''
+  syncClear()
+  wordInput.focus()
+})
+syncClear()
 const langsRow = element('p-langs')
 const transHost = element('p-trans')
 let queryIsTranslate = false
@@ -113,6 +133,7 @@ function showPane(name: 'acc' | 'trans' | 'online'): void {
 }
 const accHost = element('p-acc')
 const statusBox = element('p-status')
+const foot = element('p-foot')
 
 let settings: Settings
 let hits: Hit[] = []
@@ -125,6 +146,8 @@ let queryWord = ''
 const setStatus = (message: string, kind: 'info' | 'error' = 'info') => {
   statusBox.textContent = message
   statusBox.className = `status-inline ${kind}`
+  // 状态为空时把整条页脚收掉——否则底部永远占着一条高度（移动端尤其浪费）
+  foot.hidden = !message
 }
 
 const applyTheme = (theme: string) => {
@@ -233,6 +256,18 @@ function regroup(): void {
 
 const expandedGroup = (): DictGroup | null => groups.find((g) => g.key === expandedKey) ?? null
 
+/**
+ * 命中列表里切到上一条 / 下一条（键盘 ↑/↓ 与移动端右下角箭头按钮共用）：
+ * 关掉当前展开的那条、展开相邻那条，到头绕回。
+ */
+function moveHit(delta: number): void {
+  const items = groups
+  if (items.length === 0) return
+  const index = items.findIndex((g) => g.key === expandedKey)
+  const next = items[(((index + delta) % items.length) + items.length) % items.length]
+  void toggleExpand(next)
+}
+
 async function toggleExpand(group: DictGroup): Promise<void> {
   if (expandedKey === group.key) {
     expandedKey = null
@@ -283,6 +318,11 @@ async function loadEntry(group: DictGroup): Promise<void> {
         onEscape: () => void api.hideWindow(),
         onAudioUnsupported: () => setStatus('这条发音放不了（词典里的音频格式或文件缺失）', 'error'),
         onImage: (payload) => {
+          // 移动端没有独立查看器窗口 → 页内灯箱（同一组件，可翻页、可切明暗背景）
+          if (IS_MOBILE) {
+            openInPageLightbox(payload)
+            return
+          }
           void invoke('note', { tag: `[image->viewer] popup ${payload.src.slice(-56)}` }).catch(
             () => undefined,
           )
@@ -442,6 +482,7 @@ async function runSearch(next: string): Promise<void> {
   const trimmed = next.trim()
   if (!trimmed) return
   wordInput.value = trimmed
+  syncClear()
   queryWord = trimmed
   // 线路自动判定：像句子/长短语 → 翻译视图先立起来（词典查询不做，切回词典标签再查）
   if (isTranslateCandidate(trimmed)) {
@@ -525,19 +566,27 @@ const modal = mountSettingsModal({
     // 剪贴板监听开关 Rust 侧即时生效；这里不用额外处理
   },
   onClosed: () => wordInput.focus(),
+  // 移动端隐藏桌面专属设置项（呼出热键、失焦收起、划词优先、剪贴板监听）
+  hideDesktopOnly: IS_MOBILE,
 })
 element('p-settings-host').appendChild(modal.element)
 
 // 调试钩子：MYDICT_DEBUG_EVAL 注入的脚本可以用它驱动灯箱（与 Rust 侧的
 // MYDICT_DEBUG_EVAL 一样属于诊断基建，不参与业务逻辑）
 ;(window as unknown as Record<string, unknown>).__mydict = {
-  // 点图 → 独立的查看器窗口（铺满显示器，词典窗口不动）
+  // 点图 → 独立查看器窗口（铺满显示器，词典窗口不动）；移动端走页内灯箱
   openViewer: (payload: {
     src: string
     alt?: string
     urls: string[]
     index: number
-  }) => invoke('open_viewer', payload).catch(() => undefined),
+  }) => {
+    if (IS_MOBILE) {
+      openInPageLightbox(payload)
+      return
+    }
+    return invoke('open_viewer', payload).catch(() => undefined)
+  },
 }
 
 /* ---------------- 事件 ---------------- */
@@ -589,13 +638,28 @@ langsRow.addEventListener('click', (event) => {
 
 element('p-hide').addEventListener('click', () => void api.hideWindow())
 
-// 移动端右下角悬浮操作（顶栏在移动端被整条隐藏）：切换明暗 + 设置
+// 移动端右下角悬浮操作（顶栏在移动端被整条隐藏）：命中上/下一条 + 切换明暗 + 设置
+element('p-hit-prev').addEventListener('click', () => moveHit(-1))
+element('p-hit-next').addEventListener('click', () => moveHit(1))
 element('p-theme').addEventListener('click', () => {
   settings.theme = settings.theme === 'light' ? 'dark' : 'light'
   applyTheme(settings.theme)
   void api.saveSettings(settings)
 })
 element('p-fab-settings').addEventListener('click', () => modal.open())
+
+/**
+ * 移动端页内灯箱（懒挂载）：桌面点图开独立查看器窗口，移动端只有单窗口，
+ * 只能在页面内叠一层覆盖层——同一个灯箱组件，翻页与明暗背景切换都在里面。
+ */
+let inPageLightbox: ImageLightbox | null = null
+function openInPageLightbox(payload: LightboxPayload): void {
+  if (!inPageLightbox) {
+    inPageLightbox = mountImageLightbox({})
+    document.body.appendChild(inPageLightbox.element)
+  }
+  inPageLightbox.show(payload)
+}
 element('p-main').addEventListener('click', () => {
   void api.note('⧉ 点击')
   void openMain()
@@ -647,13 +711,9 @@ document.addEventListener('keydown', (event) => {
     return
   }
   if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-    const items = groups
-    if (items.length === 0) return
+    if (groups.length === 0) return
     event.preventDefault()
-    const index = items.findIndex((g) => g.key === expandedKey)
-    const delta = event.key === 'ArrowDown' ? 1 : -1
-    const next = items[(((index + delta) % items.length) + items.length) % items.length]
-    void toggleExpand(next)
+    moveHit(event.key === 'ArrowDown' ? 1 : -1)
   }
 })
 
@@ -715,13 +775,31 @@ async function intakeMobileText(): Promise<void> {
   const clip = (await api.readClipboard()).trim()
   if (clip && clip.length <= 120) {
     wordInput.value = clip
+    syncClear()
     wordInput.select()
   }
 }
 
-// 从后台回到前台（分享/切走再回来）时再取一次：App 冷启动只走 bootstrap 一次
+// 从后台回到前台（分享/切走再回来）时立刻再取一次：App 冷启动只走 bootstrap 一次
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) void intakeMobileText()
 })
 
+/**
+ * App 已经在前台时（典型场景：就在本应用词条里划词 → 点「MyDict」）不会触发
+ * visibilitychange，也没有别的事件通道能通知前端，所以用轻量轮询兜底。
+ * 文件被取走即删，绝大多数轮询只是一次空读，开销可忽略。
+ */
+function startSharedTextWatch(): void {
+  if (!IS_MOBILE) return
+  window.setInterval(() => {
+    if (document.hidden) return
+    void (async () => {
+      const shared = await api.takeSharedText()
+      if (shared) void runSearch(shared)
+    })()
+  }, 1500)
+}
+
+startSharedTextWatch()
 void bootstrap()

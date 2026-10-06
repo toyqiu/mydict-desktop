@@ -352,7 +352,9 @@ body {
   inset: 0;
   z-index: 3000;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.86);
+  /* 默认浅色（组件挂载时会按当前明暗状态设内联样式覆盖这里）：
+     黑色底会淹没深色图片/白底扫描件，浅色是更安全的默认值 */
+  background: #f2f2f2;
   /* 扫描图上小字密集，放大后要尽量保持锐利 */
   touch-action: none;
   cursor: grab;
@@ -624,12 +626,12 @@ body {
 }
 
 
-/* ---------- 查看器背景切换按钮（独立查看器窗口右下角） ---------- */
-.viewer-bg-toggle {
-  position: fixed;
+/* ---------- 灯箱背景明暗切换按钮（右下角；桌面查看器与移动端页内灯箱共用） ---------- */
+.lightbox-bg-toggle {
+  position: absolute;
   right: 16px;
   bottom: 16px;
-  z-index: 3100;
+  z-index: 2;
   padding: 4px 12px;
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: var(--radius-soft);
@@ -639,6 +641,6 @@ body {
   cursor: pointer;
 }
 
-.viewer-bg-toggle:hover {
+.lightbox-bg-toggle:hover {
   background: rgba(0, 0, 0, 0.65);
 }

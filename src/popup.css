@@ -65,8 +65,33 @@
 }
 
 .search {
+  position: relative;
   display: flex;
   padding: 10px 12px 8px;
+}
+
+/* 搜索框右侧的「清空」按钮：绝对定位在输入框内右端，不占布局宽度（显隐不引起位移） */
+.search-clear {
+  position: absolute;
+  right: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.search-clear:hover {
+  color: var(--text);
+  background: var(--hover-bg);
 }
 
 .search input {
@@ -262,6 +287,11 @@
 }
 
 /* ---------- 移动端（Android/iOS）：全屏铺满 + 右下角悬浮操作 ---------- */
+html.mobile {
+  /* 移动端禁止缩放：配合 viewport 的 user-scalable=no；双击不再放大 */
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
 html.mobile,
 html.mobile body {
   /* 桌面端 body 透明（圆角小窗靠 .app 裁切出形状）；移动端全屏铺满，改成不透明底，
@@ -280,30 +310,30 @@ html.mobile .app {
 /* 右下角悬浮操作（仅移动端显示；桌面用顶栏里的同类按钮） */
 .fab {
   position: fixed;
-  right: 14px;
-  bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+  right: 12px;
+  bottom: max(env(safe-area-inset-bottom, 0px), 12px);
   z-index: 50;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 .fab-btn {
-  width: 44px;
-  height: 44px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 50%;
   background: var(--surface-alt);
   color: var(--text);
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1;
   display: grid;
   place-items: center;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
 }
 .fab-btn:active {
-  transform: scale(0.94);
+  transform: scale(0.92);
 }
 
 /* 结果区占位（无命中 / 出错）：避免只留一片空白让人费解 */

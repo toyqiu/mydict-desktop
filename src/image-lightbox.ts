@@ -45,12 +45,26 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
     <button type="button" class="lightbox-nav lightbox-nav-prev" title="上一张（←）">‹</button>
     <button type="button" class="lightbox-nav lightbox-nav-next" title="下一张（→）">›</button>
     <p class="lightbox-hint"></p>
+    <button type="button" class="lightbox-bg-toggle"></button>
   `
   overlay.hidden = true
   const img = overlay.querySelector('img') as HTMLImageElement
   const prevBtn = overlay.querySelector('.lightbox-nav-prev') as HTMLButtonElement
   const nextBtn = overlay.querySelector('.lightbox-nav-next') as HTMLButtonElement
   const hint = overlay.querySelector('.lightbox-hint') as HTMLParagraphElement
+  const bgBtn = overlay.querySelector('.lightbox-bg-toggle') as HTMLButtonElement
+
+  // 背景明暗切换（桌面查看器 / 移动端页内灯箱共用）：
+  // 默认**浅色**——黑色底会淹没深色图片/白底扫描件的内容（用户实测反馈）；
+  // 深色照片类图片仍可一键切到深色。按钮自带半透明深色胶囊，两种背景下都清晰。
+  const BG_LIGHT = '#f2f2f2'
+  const BG_DARK = '#0a0a0a'
+  let bgDark = false
+  function applyBg(): void {
+    overlay.style.background = bgDark ? BG_DARK : BG_LIGHT
+    bgBtn.textContent = bgDark ? '☀ 浅色背景' : '🌙 深色背景'
+  }
+  applyBg()
 
   let images: string[] = []
   let index = 0
@@ -109,20 +123,61 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
     applyTransform()
   }
 
+  // 多指（双指捏合）状态：手机上没有滚轮，缩放全靠捏合——锚定双指中点，与滚轮同一套公式
+  const pointers = new Map<number, { x: number; y: number }>()
+  let pinching = false
+  let pinchStartDist = 1
+  let pinchStartScale = 1
+  let pinchStartOffsetX = 0
+  let pinchStartOffsetY = 0
+
   function onPointerDown(event: PointerEvent): void {
     // 翻页按钮上的按下不能开拖：setPointerCapture 会把后续指针事件转给遮罩，
     // 那样按钮就收不到 click 了
     if (event.target !== overlay && event.target !== img) return
+    pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    ;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId)
+    if (pointers.size === 2) {
+      // 第二根手指落下：从「拖动」切成「捏合」，记下基准距离/缩放/偏移
+      dragging = false
+      pinching = true
+      userAdjusted = true
+      const [a, b] = [...pointers.values()]
+      pinchStartDist = Math.hypot(b.x - a.x, b.y - a.y) || 1
+      pinchStartScale = scale
+      pinchStartOffsetX = offsetX
+      pinchStartOffsetY = offsetY
+      // 抬指时不能被当成「点了空白」而退出灯箱
+      moved = DRAG_THRESHOLD + 1
+      return
+    }
     dragging = true
     moved = 0
     pointerStartX = event.clientX
     pointerStartY = event.clientY
     offsetStartX = offsetX
     offsetStartY = offsetY
-    ;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId)
   }
 
   function onPointerMove(event: PointerEvent): void {
+    if (pointers.has(event.pointerId)) {
+      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    }
+    if (pinching && pointers.size >= 2) {
+      const [a, b] = [...pointers.values()]
+      const dist = Math.hypot(b.x - a.x, b.y - a.y) || 1
+      const rect = overlay.getBoundingClientRect()
+      const midX = (a.x + b.x) / 2 - rect.left
+      const midY = (a.y + b.y) / 2 - rect.top
+      const next = clampScale(pinchStartScale * (dist / pinchStartDist))
+      const ratio = next / pinchStartScale
+      // 锚定双指中点：中点下的那个图点保持不动（与滚轮缩放同一套公式）
+      offsetX = midX - (midX - pinchStartOffsetX) * ratio
+      offsetY = midY - (midY - pinchStartOffsetY) * ratio
+      scale = next
+      applyTransform()
+      return
+    }
     if (!dragging) return
     const dx = event.clientX - pointerStartX
     const dy = event.clientY - pointerStartY
@@ -133,14 +188,65 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
     applyTransform()
   }
 
-  function onPointerUp(): void {
+  function onPointerUp(event: PointerEvent): void {
+    pointers.delete(event.pointerId)
+    if (pointers.size < 2) pinching = false
     dragging = false
   }
 
-  /** 只有点在图片以外的空白、且刚才没在拖动时才退出 */
+  // 触屏/鼠标手势：**双击**在「适应视口」与 3 倍之间切换（以点击点为锚），**单击**关闭。
+  // 单击关闭必须等一个「双击窗口」才能确定它不是双击的首击，所以关闭有约 280ms 延迟。
+  const DOUBLE_TAP_MS = 280
+  const DOUBLE_TAP_DIST = 48
+  let lastTapAt = 0
+  let lastTapX = 0
+  let lastTapY = 0
+  let tapTimer: number | undefined
+
+  /** 双击缩放：未放大 → 以点击点为锚放大到适应视口的 3 倍；已放大 → 还原（居中适配） */
+  function toggleDoubleTapZoom(clientX: number, clientY: number): void {
+    userAdjusted = true
+    if (scale > fitScale * 1.05) {
+      fitToViewport()
+      return
+    }
+    const rect = overlay.getBoundingClientRect()
+    const px = clientX - rect.left
+    const py = clientY - rect.top
+    const target = clampScale(fitScale * 3)
+    const ratio = target / scale
+    // 锚定点击点：该点下的图保持不动（与滚轮/捏合同一套公式）
+    offsetX = px - (px - offsetX) * ratio
+    offsetY = py - (py - offsetY) * ratio
+    scale = target
+    applyTransform()
+  }
+
   function onOverlayClick(event: MouseEvent): void {
+    // 刚才是拖动或捏合，抬手不算点击
     if (moved > DRAG_THRESHOLD) return
-    if (event.target === overlay) close()
+    const now = Date.now()
+    const near =
+      Math.abs(event.clientX - lastTapX) < DOUBLE_TAP_DIST &&
+      Math.abs(event.clientY - lastTapY) < DOUBLE_TAP_DIST
+    const isDouble = now - lastTapAt <= DOUBLE_TAP_MS && near
+    lastTapAt = now
+    lastTapX = event.clientX
+    lastTapY = event.clientY
+    if (isDouble) {
+      // 第二击：撤销待执行的「单击关闭」，改做双击缩放
+      if (tapTimer !== undefined) {
+        clearTimeout(tapTimer)
+        tapTimer = undefined
+      }
+      toggleDoubleTapZoom(event.clientX, event.clientY)
+      return
+    }
+    if (tapTimer !== undefined) clearTimeout(tapTimer)
+    tapTimer = window.setTimeout(() => {
+      tapTimer = undefined
+      close()
+    }, DOUBLE_TAP_MS)
   }
 
   function go(delta: number): void {
@@ -175,9 +281,9 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
     img.alt = altText
     prevBtn.hidden = !(hasSiblings() && index > 0)
     nextBtn.hidden = !(hasSiblings() && index < images.length - 1)
-    hint.textContent = hasSiblings()
-      ? `${index + 1} / ${images.length} · 滚轮缩放 · 拖动移动 · ← → 翻页 · Esc 或点空白处退出`
-      : '滚轮缩放 · 拖动移动 · Esc 或点空白处退出'
+    // 图片下方那行操作提示不再显示（用户要求）；元素只留给「加载失败」兜底
+    hint.textContent = ''
+    hint.hidden = true
   }
 
   function showAt(next: number): void {
@@ -193,9 +299,10 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
   overlay.addEventListener('click', onOverlayClick)
   img.addEventListener('load', () => fitToViewport())
   img.addEventListener('error', () => {
-    // 加载失败：藏起裂图占位，提示文字已经在兜底
+    // 加载失败：藏起裂图占位，这一条提示此时才显示
     img.style.visibility = 'hidden'
     hint.textContent = '图片加载失败'
+    hint.hidden = false
   })
   prevBtn.addEventListener('click', (event) => {
     event.stopPropagation()
@@ -204,6 +311,13 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
   nextBtn.addEventListener('click', (event) => {
     event.stopPropagation()
     go(1)
+  })
+  // 背景切换按钮：按下/点击都不能冒泡到遮罩（否则会被当成「点空白退出」）
+  bgBtn.addEventListener('pointerdown', (event) => event.stopPropagation())
+  bgBtn.addEventListener('click', (event) => {
+    event.stopPropagation()
+    bgDark = !bgDark
+    applyBg()
   })
   // 捕获阶段挡住应用全局快捷键（见 onKeydown 的说明）
   window.addEventListener('keydown', onKeydown, true)
@@ -225,6 +339,11 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
   }
 
   function close(): void {
+    // 有挂起的「单击关闭」就撤销（例如双击的第二击已把它取消，或外部直接关灯箱）
+    if (tapTimer !== undefined) {
+      clearTimeout(tapTimer)
+      tapTimer = undefined
+    }
     overlay.hidden = true
     open = false
     document.body.style.overflow = previousBodyOverflow
@@ -239,6 +358,12 @@ export function mountImageLightbox(options: LightboxMountOptions = {}): ImageLig
       overlay.hidden = false
       open = true
       userAdjusted = false
+      // 新开一次灯箱：清掉上一次遗留的点击计时，避免首击被当成「双击的第二击」
+      lastTapAt = 0
+      if (tapTimer !== undefined) {
+        clearTimeout(tapTimer)
+        tapTimer = undefined
+      }
       previousBodyOverflow = document.body.style.overflow
       document.body.style.overflow = 'hidden'
       options.onOpenChange?.(true)

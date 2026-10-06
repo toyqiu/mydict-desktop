@@ -21,6 +21,8 @@ export interface SettingsModalOptions {
   onSaved: (next: Settings) => void
   /** 关闭后的回调（可选） */
   onClosed?: () => void
+  /** 移动端：隐藏桌面专属设置项（呼出热键、行为）——移动端没有这些能力 */
+  hideDesktopOnly?: boolean
 }
 
 export function mountSettingsModal(options: SettingsModalOptions): SettingsModal {
@@ -43,12 +45,12 @@ export function mountSettingsModal(options: SettingsModalOptions): SettingsModal
           <label><span>用户名</span><input data-role="username" type="text" /></label>
           <label><span>密码</span><input data-role="password" type="password" placeholder="留空则只保存设置、不重新登录" /></label>
         </div>
-        <div class="field-group">
+        <div class="field-group" data-group="hotkey">
           <div class="group-label">呼出热键</div>
           <label><span>组合键</span><input data-role="hotkey" type="text" placeholder="super+shift+d" /></label>
           <p class="hint">点击输入框后直接按下组合键即可录入；也可手写 super+shift+d、ctrl+alt+d、f9 等写法。保存后立即生效；被别的程序占用时会在这里报出来。</p>
         </div>
-        <div class="field-group">
+        <div class="field-group" data-group="behavior">
           <div class="group-label">行为</div>
           <label class="switch"><input type="checkbox" data-role="hide-blur" /><span>失焦自动收起（快捷搜索窗）</span></label>
           <label class="switch"><input type="checkbox" data-role="selection" /><span>划词优先：有选中文字时直接查它</span></label>
@@ -80,6 +82,15 @@ export function mountSettingsModal(options: SettingsModalOptions): SettingsModal
   `
   const field = <T extends HTMLElement>(role: string): T =>
     mask.querySelector(`[data-role="${role}"]`) as T
+
+  // 移动端：隐藏桌面专属设置项（全局热键、失焦收起、划词优先、剪贴板监听都不适用）。
+  // 只是不显示——对应字段仍随设置原样保存，值不会丢。
+  if (options.hideDesktopOnly) {
+    for (const name of ['hotkey', 'behavior']) {
+      const group = mask.querySelector<HTMLElement>(`[data-group="${name}"]`)
+      if (group) group.hidden = true
+    }
+  }
   const statusBox = field<HTMLSpanElement>('status')
   const setStatus = (message: string, kind: 'info' | 'error' = 'info') => {
     statusBox.textContent = message
