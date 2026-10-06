@@ -416,8 +416,14 @@ async function runSearch(next: string) {
         setStatus(`没有词典收录「${trimmed}」，已切换到翻译`)
         enterTranslateView(trimmed)
       } else {
-        // 短词查不到是常态：留在错误页，给「翻译」手动出口
-        setEmptyContent('没有词典收录这个词', '也可以改走翻译线路。', '翻译')
+        // 短词查不到是常态：留在错误页，给「翻译」手动出口；
+        // 若是切到某个语言标签后为空，明确点出是哪个语言，避免「一片空白」的费解
+        const scopeLabel = langTabs.find((t) => t.lang === activeScope)?.label
+        setEmptyContent(
+          scopeLabel ? `「${trimmed}」在「${scopeLabel}」下没有命中` : '没有词典收录这个词',
+          '也可以改走翻译线路，或换个语言标签试试。',
+          '翻译',
+        )
         const cta = element<HTMLButtonElement>('empty-cta')
         const onCta = () => {
           cta.removeEventListener('click', onCta)

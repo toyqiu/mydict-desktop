@@ -260,3 +260,69 @@
 .status-inline.error {
   color: var(--danger);
 }
+
+/* ---------- 移动端（Android/iOS）：全屏铺满 + 右下角悬浮操作 ---------- */
+html.mobile,
+html.mobile body {
+  /* 桌面端 body 透明（圆角小窗靠 .app 裁切出形状）；移动端全屏铺满，改成不透明底，
+     否则圆角外的透明区会透出 WebView 默认底色。 */
+  background: var(--surface);
+}
+html.mobile .app {
+  box-sizing: border-box;
+  /* 全屏铺满：不要桌面小窗的圆角 */
+  border-radius: 0;
+  /* 顶部给手机状态栏留一行：enableEdgeToEdge 下内容会画进状态栏区域。
+     env(safe-area-inset-top) 在部分 Android WebView 上取 0，故与固定值取较大者。 */
+  padding-top: max(env(safe-area-inset-top, 0px), 28px);
+}
+
+/* 右下角悬浮操作（仅移动端显示；桌面用顶栏里的同类按钮） */
+.fab {
+  position: fixed;
+  right: 14px;
+  bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fab-btn {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-alt);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+}
+.fab-btn:active {
+  transform: scale(0.94);
+}
+
+/* 结果区占位（无命中 / 出错）：避免只留一片空白让人费解 */
+.acc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+}
+.acc-empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.acc-empty-sub {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}

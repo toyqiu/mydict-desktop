@@ -6,3 +6,5 @@ src-tauri/gen/
 *.log
 .DS_Store
 .cargo-target-win/
+# 本地测试默认值（含测试账号），绝不入库 —— 见 build.rs / lib.rs 的 dev 模块
+src-tauri/dev.defaults.json

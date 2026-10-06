@@ -52,7 +52,7 @@ const element = <T extends HTMLElement>(id: string): T => {
 const app = element('app')
 app.innerHTML = `
   <div class="app">
-    <header class="titlebar" data-tauri-drag-region>
+    <header class="titlebar" id="p-titlebar" data-tauri-drag-region>
       <span class="logo" data-tauri-drag-region></span>
       <span class="brand" data-tauri-drag-region>MYDICT</span>
       <span class="spacer" data-tauri-drag-region></span>
@@ -76,6 +76,12 @@ app.innerHTML = `
     </footer>
   </div>
 
+  <!-- 移动端右下角操作：切换明暗 + 设置（桌面用顶栏，见 IS_MOBILE 分支） -->
+  <div class="fab" id="p-fab" hidden>
+    <button type="button" class="fab-btn" id="p-theme" title="切换明暗">◐</button>
+    <button type="button" class="fab-btn" id="p-fab-settings" title="设置">⚙</button>
+  </div>
+
   <div id="p-settings-host"></div>
 `
 
@@ -86,6 +92,18 @@ let queryIsTranslate = false
 let translateView: TranslateView | null = null
 const onlineHost = element('p-online')
 let onlineView: OnlineView | null = null
+
+// Android：单窗口形态下「打开主界面 ⧉」与「收起 ✕」都是桌面概念——没有第二个窗口可开，
+// 收起窗口只会留下一片空白（且移动端没有热键把它唤回来）。移动端隐藏这两个按钮，保留设置 ⚙。
+// 桌面版主界面另外走 index.html + ui-main，此处不影响。
+const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+if (IS_MOBILE) {
+  // 移动端：全屏铺满（去掉桌面圆角小窗的外观）、整个顶栏让位（顶部留出状态栏空间），
+  // 「⧉ 主界面 / ✕ 收起窗口」这两个桌面概念按钮随顶栏一起消失；操作改到右下角悬浮。
+  document.documentElement.classList.add('mobile')
+  element('p-titlebar').hidden = true
+  element('p-fab').hidden = false
+}
 
 /** 三块面板互斥显示：词典分组 / 翻译视图 / 在线词典视图 */
 function showPane(name: 'acc' | 'trans' | 'online'): void {
@@ -351,6 +369,18 @@ function renderAccordion(): void {
   }
 }
 
+/** 结果区占位（无命中 / 出错）：空白面板看不出发生了什么，必须给一句明确的话。 */
+function renderEmptyPlaceholder(title: string, sub: string): void {
+  for (const [, frame] of frames) frame.destroy()
+  frames.clear()
+  groups = []
+  expandedKey = null
+  accHost.innerHTML = `<div class="acc-empty">
+      <div class="acc-empty-title">${escapeHtml(title)}</div>
+      <div class="acc-empty-sub">${escapeHtml(sub)}</div>
+    </div>`
+}
+
 function escapeHtml(raw: string): string {
   return raw.replace(
     /[&<>"]/g,
@@ -439,13 +469,19 @@ async function runSearch(next: string): Promise<void> {
       batchIndex = 0
       for (const [, frame] of frames) frame.destroy()
       frames.clear()
-      renderAccordion()
+      const scopeLabel = langTabs.find((t) => t.lang === activeScope)?.label
+      renderEmptyPlaceholder(
+        scopeLabel
+          ? `「${trimmed}」在「${scopeLabel}」下没有命中`
+          : `没有词典收录「${trimmed}」`,
+        '换个语言标签，或点「翻译」标签看译文',
+      )
       if (isTranslateCandidate(trimmed)) {
         // 明显是句子/长短语：自动切翻译（与主界面同一策略）
         setStatus(`没有词典收录「${trimmed}」，已切换到翻译`)
         enterTranslateView(trimmed)
       } else {
-        setStatus(`没有词典收录「${trimmed}」；可点「翻译」标签看译文`)
+        setStatus('')
       }
       return
     }
@@ -465,7 +501,7 @@ async function runSearch(next: string): Promise<void> {
     batchIndex = 0
     for (const [, frame] of frames) frame.destroy()
     frames.clear()
-    renderAccordion()
+    renderEmptyPlaceholder('查不了', String(error))
     setStatus(String(error), 'error')
   }
 }
@@ -552,6 +588,14 @@ langsRow.addEventListener('click', (event) => {
 })
 
 element('p-hide').addEventListener('click', () => void api.hideWindow())
+
+// 移动端右下角悬浮操作（顶栏在移动端被整条隐藏）：切换明暗 + 设置
+element('p-theme').addEventListener('click', () => {
+  settings.theme = settings.theme === 'light' ? 'dark' : 'light'
+  applyTheme(settings.theme)
+  void api.saveSettings(settings)
+})
+element('p-fab-settings').addEventListener('click', () => modal.open())
 element('p-main').addEventListener('click', () => {
   void api.note('⧉ 点击')
   void openMain()
@@ -653,6 +697,31 @@ async function bootstrap(): Promise<void> {
   }
   void loadTabs()
   wordInput.focus()
+  void intakeMobileText()
 }
+
+/**
+ * 移动端「入口取词」：系统分享进来的文字优先（用户明确要查它 → 直接查），
+ * 其次系统剪贴板（只预填搜索框、不自动查，避免误触）；输入框已有内容时不覆盖。
+ */
+async function intakeMobileText(): Promise<void> {
+  if (!IS_MOBILE) return
+  const shared = await api.takeSharedText()
+  if (shared) {
+    void runSearch(shared)
+    return
+  }
+  if (wordInput.value.trim()) return
+  const clip = (await api.readClipboard()).trim()
+  if (clip && clip.length <= 120) {
+    wordInput.value = clip
+    wordInput.select()
+  }
+}
+
+// 从后台回到前台（分享/切走再回来）时再取一次：App 冷启动只走 bootstrap 一次
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) void intakeMobileText()
+})
 
 void bootstrap()
