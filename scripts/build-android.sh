@@ -23,8 +23,13 @@ export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
 export PATH="$HOME/.cargo/bin:$ANDROID_HOME/platform-tools:$JAVA_HOME/bin:$PATH"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/root/mydict-android-target}"
 
-MODE_ARGS=(--debug)
-if [[ "${1:-}" == "--release" ]]; then MODE_ARGS=(--release); fi
+# 注意：release 是 tauri android build 的**默认**（只有 --debug 开关），别传 --release（不认）
+PROFILE="debug"
+ARGS=(--debug)
+if [[ "${1:-}" == "--release" ]]; then
+  PROFILE="release"
+  ARGS=()
+fi
 
 # 1) 清理会让 gradle 走死代理的配置（本机 ~/.gradle 里的代理常已失效；direct 可通）。
 #    临时移除、退出时还原，不永久改动全局配置。
@@ -220,10 +225,15 @@ PY
 #    cargo target / gradle 依赖都缓存着，这一清只需几秒。
 rm -rf "$ROOT/src-tauri/gen/android/app/build"
 cd "$ROOT"
-node_modules/.bin/tauri android build "${MODE_ARGS[@]}" --target "$TARGET" --apk
+node_modules/.bin/tauri android build ${ARGS[@]+"${ARGS[@]}"} --target "$TARGET" --apk
 
-# 5) 拷产物到固定目录
-APK="$ROOT/src-tauri/gen/android/app/build/outputs/apk/universal/${MODE_ARGS[0]#--}/app-universal-${MODE_ARGS[0]#--}.apk"
+# 5) 拷产物到固定目录（release 未签名时 AGP 会带 -unsigned 后缀，这里通配取）
+PROFILE_DIR="$ROOT/src-tauri/gen/android/app/build/outputs/apk/universal/$PROFILE"
+APK="$(ls -1 "$PROFILE_DIR"/app-universal-*.apk 2>/dev/null | head -1)"
+if [[ -z "$APK" ]]; then
+  echo "[build-android] 未找到产物 APK：$PROFILE_DIR" >&2
+  exit 1
+fi
 mkdir -p "$OUT_DIR"
-cp -f "$APK" "$OUT_DIR/mydict-desktop-android-${MODE_ARGS[0]#--}-${TARGET}.apk"
-echo "[build-android] 产物：$OUT_DIR/mydict-desktop-android-${MODE_ARGS[0]#--}-${TARGET}.apk"
+cp -f "$APK" "$OUT_DIR/mydict-desktop-android-$PROFILE-$TARGET.apk"
+echo "[build-android] 产物：$OUT_DIR/mydict-desktop-android-$PROFILE-$TARGET.apk"

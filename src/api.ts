@@ -66,7 +66,7 @@ export const api = {
   onlineLookup: (serverUrl: string, token: string | null, word: string, lang: string) =>
     invoke<unknown>('online_lookup', { serverUrl, token: token ?? null, word, lang }),
   /** 读系统剪贴板文本（失败给空串）：移动端「打开/回到前台时预填搜索框」用 */
-  readClipboard: () => invoke<string>('read_clipboard_text').catch(() => ''),
+  readClipboard: () => invoke<string>('clipboard_text').catch(() => ''),
   /** 取走「系统分享进来」的文本（取走即清）；没有则 null */
   takeSharedText: () => invoke<string | null>('take_shared_text').catch(() => null),
 }

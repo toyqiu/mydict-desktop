@@ -206,8 +206,11 @@ async fn online_lookup(
 
 /// 读系统剪贴板文本（Android 上要求应用处于前台，系统才允许读取；失败一律按空串处理）。
 /// 移动端用它实现「打开/回到前台时把剪贴板里的词预填进搜索框」。
+///
+/// 名字不能叫 `read_clipboard_text`：桌面（Windows）那份剪贴板轮询用的 helper 就叫这个名字，
+/// 在 Windows 目标上会与命令重名（E0428）——本地 Linux/Android 因 helper 被 cfg 掉而查不出来。
 #[tauri::command]
-fn read_clipboard_text(app: tauri::AppHandle) -> Result<String, String> {
+fn clipboard_text(app: tauri::AppHandle) -> Result<String, String> {
     use tauri_plugin_clipboard_manager::ClipboardExt;
     app.clipboard()
         .read_text()
@@ -478,7 +481,7 @@ pub fn run() {
             close_viewer,
             translate,
             online_lookup,
-            read_clipboard_text,
+            clipboard_text,
             take_shared_text,
         ]);
 
