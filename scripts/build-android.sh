@@ -151,8 +151,19 @@ import sys
 p = sys.argv[1]
 s = open(p, encoding='utf-8').read()
 
-# 1) 早先版本把 SEND/PROCESS_TEXT 的 intent-filter 直接挂在 MainActivity 上——实测会白屏，
-#    这里把它们摘掉（改为由独立的 ShareReceiverActivity 接收）。
+# 1) **整块移除**旧的 ShareReceiverActivity，等下重建。必须整块移除：
+#    早先的实现只做「有就跳过」+「单独 strip filter」，结果第一次构建写入 filter 后，
+#    第二次构建的 strip 正则把它自己的 filter 也删了、又因名字已存在而跳过重建 →
+#    从第二次构建起 SEND/PROCESS_TEXT 全丢（debug 首跑正常、v0.4.1 release 第二跑丢失）。
+s = re.sub(
+    r'\n\s*<activity\b[^>]*android:name="\.ShareReceiverActivity".*?</activity>',
+    '',
+    s,
+    flags=re.S,
+)
+
+# 2) 摘掉历史上误挂在 MainActivity 上的 SEND/PROCESS_TEXT intent-filter（实测那样会白屏）。
+#    此时 ShareReceiverActivity 已整块删除，这条只会命中 MainActivity 上的遗留项。
 s = re.sub(
     r'\n\s*<intent-filter>\s*<action android:name="android.intent.action.(?:SEND|PROCESS_TEXT)"\s*/>.*?</intent-filter>',
     '',
@@ -160,34 +171,33 @@ s = re.sub(
     flags=re.S,
 )
 
-# 2) 幂等插入 ShareReceiverActivity（分享 + 划词两个入口都挂在它身上）
-if 'ShareReceiverActivity' not in s:
-    receiver = (
-        '        <activity\n'
-        '            android:name=".ShareReceiverActivity"\n'
-        '            android:exported="true"\n'
-        '            android:theme="@android:style/Theme.Translucent.NoTitleBar"\n'
-        '            android:noHistory="true"\n'
-        '            android:excludeFromRecents="true">\n'
-        '            <intent-filter>\n'
-        '                <action android:name="android.intent.action.SEND" />\n'
-        '                <category android:name="android.intent.category.DEFAULT" />\n'
-        '                <data android:mimeType="text/plain" />\n'
-        '            </intent-filter>\n'
-        '            <intent-filter>\n'
-        '                <action android:name="android.intent.action.PROCESS_TEXT" />\n'
-        '                <category android:name="android.intent.category.DEFAULT" />\n'
-        '                <data android:mimeType="text/plain" />\n'
-        '            </intent-filter>\n'
-        '        </activity>\n\n'
-    )
-    idx = s.rfind('</application>')
-    if idx == -1:
-        raise SystemExit('[build-android] manifest 缺少 </application>')
-    s = s[:idx] + receiver + s[idx:]
+# 3) 重新插入 ShareReceiverActivity（分享 + 划词两个入口都挂在它身上）——无条件重建，幂等
+receiver = (
+    '        <activity\n'
+    '            android:name=".ShareReceiverActivity"\n'
+    '            android:exported="true"\n'
+    '            android:theme="@android:style/Theme.Translucent.NoTitleBar"\n'
+    '            android:noHistory="true"\n'
+    '            android:excludeFromRecents="true">\n'
+    '            <intent-filter>\n'
+    '                <action android:name="android.intent.action.SEND" />\n'
+    '                <category android:name="android.intent.category.DEFAULT" />\n'
+    '                <data android:mimeType="text/plain" />\n'
+    '            </intent-filter>\n'
+    '            <intent-filter>\n'
+    '                <action android:name="android.intent.action.PROCESS_TEXT" />\n'
+    '                <category android:name="android.intent.category.DEFAULT" />\n'
+    '                <data android:mimeType="text/plain" />\n'
+    '            </intent-filter>\n'
+    '        </activity>\n\n'
+)
+idx = s.rfind('</application>')
+if idx == -1:
+    raise SystemExit('[build-android] manifest 缺少 </application>')
+s = s[:idx] + receiver + s[idx:]
 
 open(p, 'w', encoding='utf-8').write(s)
-print('[build-android] manifest：分享/划词入口已挂到 ShareReceiverActivity')
+print('[build-android] manifest：分享/划词入口已（重建）挂到 ShareReceiverActivity')
 PY
 
 # 3.6) 应用名与启动图标（同样是 gen/ 生成物，每次构建重打）

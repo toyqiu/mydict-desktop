@@ -60,6 +60,16 @@ pub struct PublicDict {
     pub lang_to: String,
 }
 
+/// `/api/dict/random` 的响应：随机挑中的一条词条（与网页版 RandomDictPanel 同一接口）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RandomEntry {
+    pub dictionary_id: i64,
+    #[serde(default)]
+    pub dictionary_name: String,
+    pub word: String,
+    pub entry_id: i64,
+}
+
 /// 服务端 `TokenPairResponse`
 #[derive(Debug, Deserialize)]
 struct TokenPair {
@@ -510,6 +520,24 @@ impl AppState {
             ));
         }
         Ok(body)
+    }
+
+    /// 随机挑一条词条（`/api/dict/random`）。`dict_ids` 非空时限定在给定词典范围内
+    /// （即当前语言标签选中的那一组），语义与网页版 RandomDictPanel 的 poolIds 一致。
+    pub async fn random_entry(&self, dict_ids: Option<&[i64]>) -> Result<RandomEntry, String> {
+        let mut path = "/api/dict/random".to_string();
+        if let Some(ids) = dict_ids {
+            if !ids.is_empty() {
+                let joined = ids
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                path.push_str(&format!("?dict_ids={}", urlencode(&joined)));
+            }
+        }
+        let response = self.get_authed(&path).await?;
+        Self::parse_or_error(response).await
     }
 }
 

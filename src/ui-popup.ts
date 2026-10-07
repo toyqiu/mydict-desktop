@@ -67,8 +67,11 @@ app.innerHTML = `
     </header>
 
     <form class="search" id="p-form">
-      <input id="p-word" type="text" placeholder="输入词语，Enter 查询" autocomplete="off" spellcheck="false" />
-      <button type="button" class="search-clear" id="p-clear" title="清空" hidden>✕</button>
+      <div class="search-field">
+        <input id="p-word" type="text" placeholder="输入词语，Enter 查询" autocomplete="off" spellcheck="false" />
+        <button type="button" class="search-clear" id="p-clear" title="清空" hidden>✕</button>
+      </div>
+      <button type="button" class="search-random" id="p-random" title="随机浏览一个词条">随机</button>
     </form>
 
     <nav class="langs" id="p-langs"></nav>
@@ -547,6 +550,57 @@ async function runSearch(next: string): Promise<void> {
   }
 }
 
+/* ---------- 随机浏览 ---------- */
+
+/**
+ * 随机浏览：向服务端要一条随机词条（`/api/dict/random`），用与搜索完全相同的手风琴
+ * 渲染（单条分组）——标题条本来就显示「词典名 + 词」，正好就是网页版随机面板要展示的
+ * 信息。命中范围跟随当前语言标签。
+ */
+async function enterRandom(): Promise<void> {
+  queryIsTranslate = false
+  if (activeScope === TRANSLATE_TAB || activeScope === ONLINE_TAB) {
+    activeScope = ''
+    renderTabs()
+  }
+  showPane('acc')
+  renderEmptyPlaceholder('正在随机挑词条…', '')
+  setStatus('')
+  try {
+    const entry = await api.randomBrowse(scopeDictIds())
+    const hit: Hit = {
+      id: entry.entry_id,
+      dictionary_id: entry.dictionary_id,
+      dictionary_name: entry.dictionary_name,
+      word: entry.word,
+      phonetic: null,
+    }
+    hits = [hit]
+    queryWord = entry.word
+    wordInput.value = entry.word
+    syncClear()
+    regroup()
+    expandedKey = groups[0]?.key ?? null
+    batchIndex = 0
+    accHost.scrollTop = 0
+    renderAccordion()
+    const group = groups[0]
+    if (group) {
+      await loadEntry(group)
+      // loadEntry 结束时会清空状态栏，这里补上「这是随机来的」这层信息
+      setStatus(`随机浏览 · ${group.dictionaryName}`)
+    }
+  } catch (error) {
+    hits = []
+    groups = []
+    expandedKey = null
+    for (const [, frame] of frames) frame.destroy()
+    frames.clear()
+    renderEmptyPlaceholder('随机挑词条失败，请重试', String(error))
+    setStatus('随机挑词条失败，请重试', 'error')
+  }
+}
+
 /* ---------- 主界面 ---------- */
 
 async function openMain(): Promise<void> {
@@ -595,6 +649,8 @@ element('p-form').addEventListener('submit', (event) => {
   event.preventDefault()
   void runSearch(wordInput.value)
 })
+
+element('p-random').addEventListener('click', () => void enterRandom())
 
 accHost.addEventListener('click', (event) => {
   // 分批导航按钮（>200 条的词典），在标题条判断之前处理

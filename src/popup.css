@@ -65,15 +65,24 @@
 }
 
 .search {
-  position: relative;
   display: flex;
+  align-items: stretch;
+  gap: 8px;
   padding: 10px 12px 8px;
 }
 
-/* 搜索框右侧的「清空」按钮：绝对定位在输入框内右端，不占布局宽度（显隐不引起位移） */
+/* 输入框 + 清空按钮的容器：清空按钮绝对定位在输入框内右端，不占布局宽度（显隐不引起位移） */
+.search-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+/* 搜索框右侧的「清空」按钮 */
 .search-clear {
   position: absolute;
-  right: 22px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
   width: 22px;
@@ -92,6 +101,24 @@
 .search-clear:hover {
   color: var(--text);
   background: var(--hover-bg);
+}
+
+/* 「随机」按钮：紧贴输入框右侧，进面板就能一眼看到（桌面与手机同一形态） */
+.search-random {
+  flex: none;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-soft);
+  background: var(--accent-grad);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--dur) var(--ease);
+}
+.search-random:active {
+  transform: scale(0.96);
 }
 
 .search input {

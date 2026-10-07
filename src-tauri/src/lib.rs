@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use tauri::{Emitter, Manager};
 
-use mydict::{AppState, AuthStatus, Hit, PublicDict, Settings};
+use mydict::{AppState, AuthStatus, Hit, PublicDict, RandomEntry, Settings};
 
 /// 本地测试默认值：**仅 debug 构建**读取 `dev.defaults.json`（gitignore，编译期由 build.rs
 /// 读入 OUT_DIR）。用来省掉「每装一次测试版就重填服务器/账号」的麻烦；发布版根本不编译
@@ -251,7 +251,7 @@ fn manual_app_config_dir() -> PathBuf {
     let base = std::env::var("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|_| std::env::var("HOME").map(|h| PathBuf::from(h).join(".config")));
-    base.unwrap_or_else(|_| PathBuf::from("."))
+    base.unwrap_or_else(|_| std::env::temp_dir())
         .join("com.toyqiu.mydict.desktop")
 }
 
@@ -345,7 +345,7 @@ pub fn run() {
                 let dir = app
                     .path()
                     .app_config_dir()
-                    .unwrap_or_else(|_| PathBuf::from("."));
+                    .unwrap_or_else(|_| std::env::temp_dir());
                 let _ = std::fs::create_dir_all(&dir);
                 app.manage(load_state(dir));
                 // 单窗口：确保主窗口可见（移动端没有「启动隐藏」的形态）
@@ -468,6 +468,7 @@ pub fn run() {
             search,
             dictionaries,
             entry_html,
+            random_browse,
             hide_window,
             selection_text,
             note,
@@ -1032,6 +1033,16 @@ async fn entry_html(
     state
         .entry_html(dictionary_id, &word, &entry_ids, theme.as_deref())
         .await
+}
+
+/// 随机挑一条词条（快捷面板的「随机浏览」）。dict_ids 传当前语言标签的词典组，
+/// 不传则全库随机。
+#[tauri::command]
+async fn random_browse(
+    state: tauri::State<'_, AppState>,
+    dict_ids: Option<Vec<i64>>,
+) -> Result<RandomEntry, String> {
+    state.random_entry(dict_ids.as_deref()).await
 }
 
 /// 焦点探针：返回「当前活动窗口」的 `id|名字`，供前端判断失焦是真离开还是幽灵事件。

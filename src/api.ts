@@ -41,6 +41,14 @@ export interface DictInfo {
   lang_to: string
 }
 
+/** `/api/dict/random` 的返回：随机挑中的一条词条 */
+export interface RandomEntry {
+  dictionary_id: number
+  dictionary_name: string
+  word: string
+  entry_id: number
+}
+
 export const api = {
   getSettings: () => invoke<Settings>('get_settings'),
   saveSettings: (settings: Settings) => invoke<void>('save_settings', { settings }),
@@ -54,6 +62,9 @@ export const api = {
     invoke<Hit[]>('search', { word, dictIds: dictIds ?? null }),
   entryHtml: (dictionaryId: number, word: string, entryIds: number[], theme?: string) =>
     invoke<string>('entry_html', { dictionaryId, word, entryIds, theme: theme ?? null }),
+  /** 随机浏览：随机挑一条词条（可限定在当前语言标签的词典组内） */
+  randomBrowse: (dictIds?: number[]) =>
+    invoke<RandomEntry>('random_browse', { dictIds: dictIds ?? null }),
   hideWindow: () => invoke<void>('hide_window'),
   note: (tag: string) => invoke<void>('note', { tag }),
   focusProbe: () => invoke<string>('focus_probe'),
