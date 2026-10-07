@@ -78,18 +78,26 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            libxdo-dev
+            libxdo-dev \
+            rpm \
+            libfuse2
 
       - name: 安装前端依赖
         run: pnpm install --frozen-lockfile
 
-      - name: 构建 Linux 安装包（deb）
+      - name: 构建 Linux 安装包（deb / rpm / AppImage）
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # appimagetool 自己是个 AppImage：runner 上没有 FUSE 时用它自解压运行
+          APPIMAGE_EXTRACT_AND_RUN: '1'
         with:
           tagName: ${{ github.ref_name }}
+          # 这两个不是装饰：tauri-action 在**找不到 release 时会尝试新建**，
+          # 而新建必须带 releaseName，否则直接报「Release not found or created.」
+          # （两个 job 并存时先跑完的那个会把 release 建出来，后跑的就只需上传）
+          releaseName: 'MyDict ${{ github.ref_name }}'
+          releaseBody: 'Windows / Linux / Android 各平台安装包见下方附件。'
           releaseDraft: false
           prerelease: false
-          # bundle.targets 已配 deb，这里显式写出来免得将来改配置时静默漏掉
-          args: --bundles deb
+          args: --bundles deb,rpm,appimage
