@@ -418,7 +418,8 @@ function renderAccordion(): void {
   }
 }
 
-/** 结果区占位（无命中 / 出错）：空白面板看不出发生了什么，必须给一句明确的话。 */
+/** 结果区占位（无命中 / 出错）：空白面板看不出发生了什么，必须给一句明确的话。
+ *  sub 传空串就只留标题那一行。 */
 function renderEmptyPlaceholder(title: string, sub: string): void {
   for (const [, frame] of frames) frame.destroy()
   frames.clear()
@@ -426,7 +427,7 @@ function renderEmptyPlaceholder(title: string, sub: string): void {
   expandedKey = null
   accHost.innerHTML = `<div class="acc-empty">
       <div class="acc-empty-title">${escapeHtml(title)}</div>
-      <div class="acc-empty-sub">${escapeHtml(sub)}</div>
+      ${sub ? `<div class="acc-empty-sub">${escapeHtml(sub)}</div>` : ''}
     </div>`
 }
 
@@ -524,7 +525,7 @@ async function runSearch(next: string): Promise<void> {
         scopeLabel
           ? `「${trimmed}」在「${scopeLabel}」下没有命中`
           : `没有词典收录「${trimmed}」`,
-        '换个语言标签，或点「翻译」标签看译文',
+        '',
       )
       if (isTranslateCandidate(trimmed)) {
         // 明显是句子/长短语：自动切翻译（与主界面同一策略）

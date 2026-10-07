@@ -65,6 +65,8 @@ app.innerHTML = `
 
     <div class="trans-host" id="trans" hidden></div>
     <div class="online-host" id="online" hidden></div>
+    <!-- 随机浏览（对齐网页版 RandomDictPanel）：头部左「词典名 + 随机浏览 · N」，右「换一个 →」 -->
+    <div class="random-host" id="random" hidden></div>
 
     <div class="batch-nav" id="batch-nav" hidden>
       <button type="button" data-batch="prev">‹ 上一批</button>
@@ -98,21 +100,27 @@ let queryIsTranslate = false
 let translateView: TranslateView | null = null
 const onlineHost = element<HTMLDivElement>('online')
 let onlineView: OnlineView | null = null
+const randomHost = element<HTMLDivElement>('random')
+/** 随机浏览的伪标签值（与快捷面板同一取值），对齐网页版「在线」右侧的「随机」标签 */
+const RANDOM_TAB = '__random__'
 
-/** 三块面板互斥显示：结果区 / 翻译视图 / 在线词典视图 */
-function showPane(name: 'results' | 'trans' | 'online'): void {
+/** 四块面板互斥显示：结果区 / 翻译视图 / 在线词典视图 / 随机浏览视图 */
+function showPane(name: 'results' | 'trans' | 'online' | 'random'): void {
   transHost.hidden = name !== 'trans'
   onlineHost.hidden = name !== 'online'
+  randomHost.hidden = name !== 'random'
   // 结果区的显隐与空态逻辑耦合，单独处理
   if (name === 'results') {
     if (groups.length === 0) {
       showEmpty(true)
-      setEmptyContent('没有词典收录这个词', '也可以改走翻译线路，或换个词试试。', '翻译')
+      setEmptyContent('没有词典收录这个词', '', '翻译')
     } else {
       showEmpty(false)
     }
   } else {
     showEmpty(false)
+    // 随机面板是自成一体的：不要把上一次查询的结果区叠在它旁边
+    if (name === 'random') resultsPane.hidden = true
   }
 }
 const settingsHost = element('settings-host')
@@ -195,10 +203,12 @@ function showEmpty(visible: boolean) {
   resultsPane.hidden = visible
 }
 
-/** 空态的三个槽位：标题 / 说明 / 按钮（按钮传 null 就藏起来） */
+/** 空态的三个槽位：标题 / 说明 / 按钮（按钮传 null 就藏起来；说明传空串也藏起来） */
 function setEmptyContent(title: string, sub: string, cta: string | null) {
   element('empty-title').textContent = title
-  element('empty-sub').textContent = sub
+  const subEl = element('empty-sub')
+  subEl.textContent = sub
+  subEl.hidden = !sub
   const button = element<HTMLButtonElement>('empty-cta')
   button.textContent = cta ?? ''
   button.hidden = cta === null
@@ -230,6 +240,7 @@ function renderTabs(): void {
     { lang: '', label: '全部', dictIds: [] as number[] },
     ...langTabs,
     { lang: ONLINE_TAB, label: '在线', dictIds: [] as number[] },
+    { lang: RANDOM_TAB, label: '随机', dictIds: [] as number[] },
     { lang: TRANSLATE_TAB, label: '翻译', dictIds: [] as number[] },
   ]
   const existing = [...langsRow.children] as HTMLElement[]
@@ -338,6 +349,93 @@ function renderHits() {
     .join('')
 }
 
+/* ---------- 随机浏览（对齐网页版「随机」标签 + RandomDictPanel） ---------- */
+
+/**
+ * 进入随机浏览视图：伪标签（位置紧随「在线」），激活时自己拉一条随机词条并渲染。
+ * 面板结构对齐网页版 RandomDictPanel——头部左「词典名 + 随机浏览 · N 部词典」、
+ * 右「换一个 →」，下面是词条大标题与词条正文。
+ */
+function enterRandomView(): void {
+  queryIsTranslate = false
+  activeScope = RANDOM_TAB
+  renderTabs()
+  showPane('random')
+  void rollRandom()
+}
+
+/** 随机面板独占一个 iframe：结果区那个 entryFrame 跟着查询结果走，不能借用 */
+let randomFrame: EntryFrame | null = null
+function ensureRandomFrame(): EntryFrame {
+  if (!randomFrame) {
+    randomFrame = createEntryFrame({
+      baseUrl: () => settings.server_url,
+      theme: () => settings.theme,
+      onHeight: (height) => {
+        if (randomFrame && height > 0) randomFrame.element.style.height = `${height}px`
+      },
+      onEntry: (word) => {
+        void runSearch(word)
+        input.focus()
+      },
+      onExternal: (url) => {
+        if (url) void api.openExternal(url)
+      },
+      onEscape: () => void api.hideWindow(),
+      onAudioUnsupported: () => setStatus('这条发音放不了（词典里的音频格式或文件缺失）', 'error'),
+      onImage: (payload) => {
+        void invoke('note', { tag: `[image->viewer] random ${payload.src.slice(-56)}` }).catch(
+          () => undefined,
+        )
+        invoke('open_viewer', { ...payload }).catch((err) =>
+          invoke('note', { tag: `[viewer-err] ${String(err)}` }).catch(() => undefined),
+        )
+      },
+    })
+  }
+  return randomFrame
+}
+
+/** 挑一条随机词条并渲染；「换一个 →」与失败后的「重新来一个」都走这里 */
+async function rollRandom(): Promise<void> {
+  const ids = scopeDictIds()
+  const poolLabel = ids && ids.length ? `${ids.length} 部词典` : '全部可用词典'
+  randomHost.innerHTML = '<p class="random-hint">正在随机挑词条…</p>'
+  setStatus('')
+  try {
+    const entry = await api.randomBrowse(ids)
+    const html = await api.entryHtml(
+      entry.dictionary_id,
+      entry.word,
+      [entry.entry_id],
+      settings.theme,
+    )
+    randomHost.innerHTML = `
+      <header class="random-head">
+        <div class="random-meta">
+          <span class="random-dict">${escapeHtml(entry.dictionary_name)}</span>
+          <span class="random-pool">随机浏览 · ${escapeHtml(poolLabel)}</span>
+        </div>
+        <div class="random-actions">
+          <button type="button" class="next-btn" id="random-next">换一个 →</button>
+        </div>
+      </header>
+      <h2 class="random-word">${escapeHtml(entry.word)}</h2>
+      <div class="random-body" id="random-body"></div>`
+    const frame = ensureRandomFrame()
+    frame.load(html)
+    element('random-body').appendChild(frame.element)
+    element('random-next').addEventListener('click', () => void rollRandom())
+  } catch (error) {
+    randomHost.innerHTML = `<p class="random-hint">
+        随机挑词条失败，请重试。
+        <button type="button" class="retry" id="random-retry">重新来一个</button>
+      </p>`
+    element('random-retry').addEventListener('click', () => void rollRandom())
+    setStatus(String(error), 'error')
+  }
+}
+
 /** 进入在线词典视图（主界面）：懒加载（缓存命中秒回） */
 function enterOnlineView(text: string): void {
   queryIsTranslate = false
@@ -421,7 +519,7 @@ async function runSearch(next: string) {
         const scopeLabel = langTabs.find((t) => t.lang === activeScope)?.label
         setEmptyContent(
           scopeLabel ? `「${trimmed}」在「${scopeLabel}」下没有命中` : '没有词典收录这个词',
-          '也可以改走翻译线路，或换个语言标签试试。',
+          '',
           '翻译',
         )
         const cta = element<HTMLButtonElement>('empty-cta')
@@ -527,6 +625,11 @@ langsRow.addEventListener('click', (event) => {
     if (queryWord) enterTranslateView(queryWord)
     return
   }
+  if (lang === RANDOM_TAB) {
+    // 随机伪标签：与快捷面板/网页版同一位置与语义
+    enterRandomView()
+    return
+  }
   activeScope = lang
   renderTabs()
   leaveTranslateView()
@@ -569,10 +672,10 @@ document.addEventListener('keydown', (event) => {
   }
   // ←/→ 切换语言标签（检索范围），切换后用当前词重查
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-    // 循环序列 = 语言标签 + 末尾的翻译标签；「全部」只是点击用的重置位，不参与循环
+    // 循环序列 = 语言标签 + 末尾的随机/翻译伪标签；「全部」只是点击用的重置位，不参与循环
     if (langTabs.length === 0 && !queryWord) return
     event.preventDefault()
-    const ordered = [...langTabs, { lang: TRANSLATE_TAB }]
+    const ordered = [...langTabs, { lang: RANDOM_TAB }, { lang: TRANSLATE_TAB }]
     const delta = event.key === 'ArrowRight' ? 1 : -1
     const at = ordered.findIndex((t) => t.lang === activeScope)
     const next = ordered[(((at + delta) % ordered.length) + ordered.length) % ordered.length]
@@ -580,6 +683,10 @@ document.addEventListener('keydown', (event) => {
       activeScope = TRANSLATE_TAB
       renderTabs()
       if (queryWord) enterTranslateView(queryWord)
+      return
+    }
+    if (next.lang === RANDOM_TAB) {
+      enterRandomView()
       return
     }
     activeScope = next.lang
