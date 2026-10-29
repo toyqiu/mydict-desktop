@@ -141,6 +141,8 @@ export function mountVocabView(options: VocabViewOptions): VocabView {
   let busy = false
   let reviewed = 0
   let searchTimer: ReturnType<typeof setTimeout> | undefined
+  // 同一张卡的提交 id 要稳定：超时重试若换新 id，服务端幂等就失效、复习会被计两次
+  const reviewIds = new Map<number, string>()
   let answerFrame: EntryFrame | null = null
 
   function setMeta(text: string): void {
@@ -297,7 +299,13 @@ export function mountVocabView(options: VocabViewOptions): VocabView {
     if (!item || !revealed || busy) return
     busy = true
     try {
-      const result = await api.vocabReview(item.id, rating, reviewId())
+      let submitId = reviewIds.get(item.id)
+      if (!submitId) {
+        submitId = reviewId()
+        reviewIds.set(item.id, submitId)
+      }
+      const result = await api.vocabReview(item.id, rating, submitId)
+      reviewIds.delete(item.id)
       counts = result.counts
       reviewed += 1
       queue.shift()
