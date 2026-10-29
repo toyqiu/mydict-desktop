@@ -77,6 +77,81 @@ struct TokenPair {
     refresh_token: String,
 }
 
+/// 生词本条目（`VocabItemOut`）。字段与网页版一致，句子挖矿那四个可空。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VocabItem {
+    pub id: i64,
+    pub word: String,
+    #[serde(default)]
+    pub phonetic: Option<String>,
+    #[serde(default)]
+    pub definition: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub dictionary_id: Option<i64>,
+    #[serde(default)]
+    pub dictionary_name: Option<String>,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub due_at: Option<String>,
+    #[serde(default)]
+    pub reps: i64,
+    #[serde(default)]
+    pub lapses: i64,
+    #[serde(default)]
+    pub last_review_at: Option<String>,
+    #[serde(default)]
+    pub context_sentence: Option<String>,
+    #[serde(default)]
+    pub context_match: Option<String>,
+    #[serde(default)]
+    pub context_source: Option<String>,
+    #[serde(default)]
+    pub context_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct VocabCounts {
+    pub total: i64,
+    /// 未复习过的新词（`new` 是 Rust 关键字，序列化仍用服务端字段名）
+    #[serde(rename = "new")]
+    pub new_count: i64,
+    pub due: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VocabList {
+    pub items: Vec<VocabItem>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VocabDue {
+    pub items: Vec<VocabItem>,
+    pub counts: VocabCounts,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VocabReviewResult {
+    pub item: VocabItem,
+    pub counts: VocabCounts,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct VocabStats {
+    pub total: i64,
+    #[serde(rename = "new")]
+    pub new_count: i64,
+    pub due: i64,
+    pub learned: i64,
+    pub reviewed_today: i64,
+    pub scheduled_total: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub server_url: String,
@@ -438,6 +513,33 @@ impl AppState {
         unreachable!("循环里必然已 return")
     }
 
+    /// 带鉴权的 JSON POST；遇 401 自动刷新一次再重试（与 get_authed 同策略）
+    async fn post_authed(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<reqwest::Response, String> {
+        let base = self.base()?;
+        let url = format!("{base}{path}");
+        let mut token = self.access_or_refresh().await?;
+        for attempt in 0..2 {
+            let response = self
+                .client
+                .post(&url)
+                .bearer_auth(&token)
+                .json(body)
+                .send()
+                .await
+                .map_err(|e| friendly_request_error(&url, &e))?;
+            if response.status().as_u16() == 401 && attempt == 0 {
+                token = self.refresh().await?;
+                continue;
+            }
+            return Ok(response);
+        }
+        unreachable!("循环里必然已 return")
+    }
+
     async fn parse_or_error<T: for<'de> Deserialize<'de>>(
         response: reqwest::Response,
     ) -> Result<T, String> {
@@ -538,6 +640,82 @@ impl AppState {
         }
         let response = self.get_authed(&path).await?;
         Self::parse_or_error(response).await
+    }
+
+    // ---------------- 生词本（与网页版同一套 web 会话接口） ----------------
+
+    pub async fn vocab_list(
+        &self,
+        search: Option<&str>,
+        page: u32,
+        page_size: u32,
+    ) -> Result<VocabList, String> {
+        let mut path = format!("/api/vocab?page={page}&page_size={page_size}");
+        if let Some(query) = search {
+            let trimmed = query.trim();
+            if !trimmed.is_empty() {
+                path.push_str(&format!("&search={}", urlencode(trimmed)));
+            }
+        }
+        let response = self.get_authed(&path).await?;
+        Self::parse_or_error(response).await
+    }
+
+    pub async fn vocab_stats(&self) -> Result<VocabStats, String> {
+        let response = self.get_authed("/api/vocab/stats").await?;
+        Self::parse_or_error(response).await
+    }
+
+    pub async fn vocab_due(&self, limit: u32, new_limit: u32) -> Result<VocabDue, String> {
+        let response = self
+            .get_authed(&format!(
+                "/api/vocab/due?limit={limit}&new_limit={new_limit}"
+            ))
+            .await?;
+        Self::parse_or_error(response).await
+    }
+
+    /// 提交一次评分；`client_review_id` 由前端给（同一张卡的重复提交据此幂等）
+    pub async fn vocab_review(
+        &self,
+        item_id: i64,
+        rating: u8,
+        client_review_id: &str,
+    ) -> Result<VocabReviewResult, String> {
+        let body = serde_json::json!({
+            "rating": rating,
+            "client": "desktop",
+            "client_review_id": client_review_id,
+        });
+        let response = self
+            .post_authed(&format!("/api/vocab/{item_id}/review"), &body)
+            .await?;
+        Self::parse_or_error(response).await
+    }
+
+    /// 复习卡背面的词条 HTML（收藏时的快照，不是实时查询）
+    pub async fn vocab_entry_html(
+        &self,
+        item_id: i64,
+        theme: Option<&str>,
+    ) -> Result<String, String> {
+        let mut path = format!("/api/vocab/{item_id}/entry");
+        if let Some(theme) = theme {
+            path.push_str(&format!("?theme={}", urlencode(theme)));
+        }
+        let response = self.get_authed(&path).await?;
+        let status = response.status();
+        let body = response
+            .text()
+            .await
+            .map_err(|e| format!("读取生词释义失败：{e}"))?;
+        if !status.is_success() {
+            return Err(format!(
+                "取释义失败（HTTP {status}）：{}",
+                body.chars().take(200).collect::<String>()
+            ));
+        }
+        Ok(body)
     }
 }
 

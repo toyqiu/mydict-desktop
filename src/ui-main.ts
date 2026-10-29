@@ -12,6 +12,7 @@ import {
   type TranslateView,
 } from './translate'
 import { ONLINE_TAB, mountOnlineView, type OnlineView } from './online'
+import { VOCAB_TAB, mountVocabView, type VocabView } from './vocab'
 import './theme.css'
 import './styles.css'
 
@@ -67,6 +68,8 @@ app.innerHTML = `
     <div class="online-host" id="online" hidden></div>
     <!-- 随机浏览（对齐网页版 RandomDictPanel）：头部左「词典名 + 随机浏览 · N」，右「换一个 →」 -->
     <div class="random-host" id="random" hidden></div>
+    <!-- 生词本（列表 + 复习）：与网页版同一份数据，调度在服务端算 -->
+    <div class="vocab-wrap" id="vocab" hidden></div>
 
     <div class="batch-nav" id="batch-nav" hidden>
       <button type="button" data-batch="prev">‹ 上一批</button>
@@ -101,14 +104,17 @@ let translateView: TranslateView | null = null
 const onlineHost = element<HTMLDivElement>('online')
 let onlineView: OnlineView | null = null
 const randomHost = element<HTMLDivElement>('random')
+const vocabHost = element<HTMLDivElement>('vocab')
+let vocabView: VocabView | null = null
 /** 随机浏览的伪标签值（与快捷面板同一取值），对齐网页版「在线」右侧的「随机」标签 */
 const RANDOM_TAB = '__random__'
 
-/** 四块面板互斥显示：结果区 / 翻译视图 / 在线词典视图 / 随机浏览视图 */
-function showPane(name: 'results' | 'trans' | 'online' | 'random'): void {
+/** 五块面板互斥显示：结果区 / 翻译 / 在线词典 / 随机浏览 / 生词本 */
+function showPane(name: 'results' | 'trans' | 'online' | 'random' | 'vocab'): void {
   transHost.hidden = name !== 'trans'
   onlineHost.hidden = name !== 'online'
   randomHost.hidden = name !== 'random'
+  vocabHost.hidden = name !== 'vocab'
   // 结果区的显隐与空态逻辑耦合，单独处理
   if (name === 'results') {
     if (groups.length === 0) {
@@ -119,8 +125,8 @@ function showPane(name: 'results' | 'trans' | 'online' | 'random'): void {
     }
   } else {
     showEmpty(false)
-    // 随机面板是自成一体的：不要把上一次查询的结果区叠在它旁边
-    if (name === 'random') resultsPane.hidden = true
+    // 随机/生词本面板自成一体的：不要把上一次查询的结果区叠在它旁边
+    if (name === 'random' || name === 'vocab') resultsPane.hidden = true
   }
 }
 const settingsHost = element('settings-host')
@@ -241,6 +247,7 @@ function renderTabs(): void {
     ...langTabs,
     { lang: ONLINE_TAB, label: '在线', dictIds: [] as number[] },
     { lang: RANDOM_TAB, label: '随机', dictIds: [] as number[] },
+    { lang: VOCAB_TAB, label: '生词本', dictIds: [] as number[] },
     { lang: TRANSLATE_TAB, label: '翻译', dictIds: [] as number[] },
   ]
   const existing = [...langsRow.children] as HTMLElement[]
@@ -356,6 +363,30 @@ function renderHits() {
  * 面板结构对齐网页版 RandomDictPanel——头部左「词典名 + 随机浏览 · N 部词典」、
  * 右「换一个 →」，下面是词条大标题与词条正文。
  */
+function enterVocabView(): void {
+  queryIsTranslate = false
+  activeScope = VOCAB_TAB
+  renderTabs()
+  showPane('vocab')
+  if (!vocabView) {
+    vocabView = mountVocabView({
+      baseUrl: () => settings.server_url,
+      theme: () => settings.theme,
+      onEntry: (word) => {
+        void runSearch(word)
+        input.focus()
+      },
+      onExternal: (url) => {
+        if (url) void api.openExternal(url)
+      },
+      onHide: () => void api.hideWindow(),
+      onStatus: (message, kind) => setStatus(message, kind ?? 'info'),
+    })
+    vocabHost.appendChild(vocabView.element)
+  }
+  vocabView.enter()
+}
+
 function enterRandomView(): void {
   queryIsTranslate = false
   activeScope = RANDOM_TAB
@@ -630,6 +661,10 @@ langsRow.addEventListener('click', (event) => {
     enterRandomView()
     return
   }
+  if (lang === VOCAB_TAB) {
+    enterVocabView()
+    return
+  }
   activeScope = lang
   renderTabs()
   leaveTranslateView()
@@ -675,7 +710,12 @@ document.addEventListener('keydown', (event) => {
     // 循环序列 = 语言标签 + 末尾的随机/翻译伪标签；「全部」只是点击用的重置位，不参与循环
     if (langTabs.length === 0 && !queryWord) return
     event.preventDefault()
-    const ordered = [...langTabs, { lang: RANDOM_TAB }, { lang: TRANSLATE_TAB }]
+    const ordered = [
+      ...langTabs,
+      { lang: RANDOM_TAB },
+      { lang: VOCAB_TAB },
+      { lang: TRANSLATE_TAB },
+    ]
     const delta = event.key === 'ArrowRight' ? 1 : -1
     const at = ordered.findIndex((t) => t.lang === activeScope)
     const next = ordered[(((at + delta) % ordered.length) + ordered.length) % ordered.length]
@@ -687,6 +727,10 @@ document.addEventListener('keydown', (event) => {
     }
     if (next.lang === RANDOM_TAB) {
       enterRandomView()
+      return
+    }
+    if (next.lang === VOCAB_TAB) {
+      enterVocabView()
       return
     }
     activeScope = next.lang
@@ -716,6 +760,8 @@ void listen('mydict:main-shown', () => {
 void listen<Settings>('mydict:settings-updated', (event) => {
   // 启动时未登录会拿不到语言标签；设置保存（含登录）后补载
   if (langTabs.length === 0) void loadTabs()
+  // 生词本依赖登录态；登录/换服务器后重新拉一次
+  vocabView?.refresh()
   settings = event.payload
   applyTheme(settings.theme)
   // 已挂载的词条文档同步换明暗（iframe 保留着播放位置，不能重建）

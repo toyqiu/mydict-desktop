@@ -12,7 +12,10 @@ use std::path::PathBuf;
 
 use tauri::{Emitter, Manager};
 
-use mydict::{AppState, AuthStatus, Hit, PublicDict, RandomEntry, Settings};
+use mydict::{
+    AppState, AuthStatus, Hit, PublicDict, RandomEntry, Settings, VocabDue, VocabList,
+    VocabReviewResult, VocabStats,
+};
 
 /// 本地测试默认值：**仅 debug 构建**读取 `dev.defaults.json`（gitignore，编译期由 build.rs
 /// 读入 OUT_DIR）。用来省掉「每装一次测试版就重填服务器/账号」的麻烦；发布版根本不编译
@@ -484,6 +487,11 @@ pub fn run() {
             online_lookup,
             clipboard_text,
             take_shared_text,
+            vocab_list,
+            vocab_stats,
+            vocab_due,
+            vocab_review,
+            vocab_entry_html,
         ]);
 
     builder
@@ -1043,6 +1051,57 @@ async fn random_browse(
     dict_ids: Option<Vec<i64>>,
 ) -> Result<RandomEntry, String> {
     state.random_entry(dict_ids.as_deref()).await
+}
+
+// ---------------- 生词本 ----------------
+
+#[tauri::command]
+async fn vocab_list(
+    state: tauri::State<'_, AppState>,
+    search: Option<String>,
+    page: Option<u32>,
+    page_size: Option<u32>,
+) -> Result<VocabList, String> {
+    state
+        .vocab_list(search.as_deref(), page.unwrap_or(1), page_size.unwrap_or(50))
+        .await
+}
+
+#[tauri::command]
+async fn vocab_stats(state: tauri::State<'_, AppState>) -> Result<VocabStats, String> {
+    state.vocab_stats().await
+}
+
+#[tauri::command]
+async fn vocab_due(
+    state: tauri::State<'_, AppState>,
+    limit: Option<u32>,
+    new_limit: Option<u32>,
+) -> Result<VocabDue, String> {
+    state
+        .vocab_due(limit.unwrap_or(20), new_limit.unwrap_or(10))
+        .await
+}
+
+#[tauri::command]
+async fn vocab_review(
+    state: tauri::State<'_, AppState>,
+    item_id: i64,
+    rating: u8,
+    client_review_id: String,
+) -> Result<VocabReviewResult, String> {
+    state
+        .vocab_review(item_id, rating, &client_review_id)
+        .await
+}
+
+#[tauri::command]
+async fn vocab_entry_html(
+    state: tauri::State<'_, AppState>,
+    item_id: i64,
+    theme: Option<String>,
+) -> Result<String, String> {
+    state.vocab_entry_html(item_id, theme.as_deref()).await
 }
 
 /// 焦点探针：返回「当前活动窗口」的 `id|名字`，供前端判断失焦是真离开还是幽灵事件。

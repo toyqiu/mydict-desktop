@@ -49,6 +49,57 @@ export interface RandomEntry {
   entry_id: number
 }
 
+/** 生词本条目（`VocabItemOut`）：definition 是收藏时的快照，不是实时的 */
+export interface VocabItem {
+  id: number
+  word: string
+  phonetic: string | null
+  definition: string | null
+  note: string | null
+  dictionary_id: number | null
+  dictionary_name: string | null
+  created_at: string
+  due_at: string | null
+  reps: number
+  lapses: number
+  last_review_at: string | null
+  context_sentence: string | null
+  context_match: string | null
+  context_source: string | null
+  context_url: string | null
+}
+
+export interface VocabCounts {
+  total: number
+  /** 未复习过的新词 */
+  new: number
+  /** 已到期待复习 */
+  due: number
+}
+
+export interface VocabList {
+  items: VocabItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface VocabDue {
+  items: VocabItem[]
+  counts: VocabCounts
+}
+
+export interface VocabReviewResult {
+  item: VocabItem
+  counts: VocabCounts
+}
+
+export interface VocabStats extends VocabCounts {
+  learned: number
+  reviewed_today: number
+  scheduled_total: number
+}
+
 export const api = {
   getSettings: () => invoke<Settings>('get_settings'),
   saveSettings: (settings: Settings) => invoke<void>('save_settings', { settings }),
@@ -78,6 +129,19 @@ export const api = {
     invoke<unknown>('online_lookup', { serverUrl, token: token ?? null, word, lang }),
   /** 读系统剪贴板文本（失败给空串）：移动端「打开/回到前台时预填搜索框」用 */
   readClipboard: () => invoke<string>('clipboard_text').catch(() => ''),
+  /** 生词本列表（服务端 web 会话接口，与网页版同一份数据） */
+  vocabList: (search: string | null, page = 1, pageSize = 50) =>
+    invoke<VocabList>('vocab_list', { search, page, pageSize }),
+  vocabStats: () => invoke<VocabStats>('vocab_stats'),
+  /** 本次要复习的卡片：到期优先，不够用新词补 */
+  vocabDue: (limit = 20, newLimit = 10) =>
+    invoke<VocabDue>('vocab_due', { limit, newLimit }),
+  /** 提交一次评分：1=重来 2=困难 3=记得 4=简单 */
+  vocabReview: (itemId: number, rating: number, clientReviewId: string) =>
+    invoke<VocabReviewResult>('vocab_review', { itemId, rating, clientReviewId }),
+  /** 复习卡背面的词条 HTML（收藏时的快照） */
+  vocabEntryHtml: (itemId: number, theme?: string) =>
+    invoke<string>('vocab_entry_html', { itemId, theme: theme ?? null }),
   /** 取走「系统分享进来」的文本（取走即清）；没有则 null */
   takeSharedText: () => invoke<string | null>('take_shared_text').catch(() => null),
 }

@@ -442,3 +442,313 @@ body {
   font-size: 0.62rem;
   opacity: 0.75;
 }
+
+/* ---------- 生词本（列表 + 复习） ---------- */
+
+.vocab-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.vocab-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 16px;
+}
+
+.vocab-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.vocab-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.vocab-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.vocab-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vocab-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vocab-search {
+  width: 160px;
+  padding: 6px 10px;
+  border-radius: var(--radius-soft);
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.vocab-search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.vocab-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.vocab-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vocab-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-soft);
+  background: var(--surface-raised);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.vocab-row:hover {
+  background: var(--hover-bg);
+  border-color: var(--border);
+}
+
+.vocab-word {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vocab-dict {
+  font-size: 11px;
+  color: var(--text-faint);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vocab-badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-soft);
+  color: var(--text-muted);
+}
+.vocab-badge.is-new {
+  color: var(--accent);
+  border-color: var(--accent-ring);
+  background: var(--accent-soft);
+}
+
+.vocab-empty {
+  margin: 24px 0 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* 复习 */
+
+.vocab-review {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-progress {
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--border-soft);
+  overflow: hidden;
+  flex: none;
+}
+.review-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent-grad);
+  transition: width var(--dur) var(--ease);
+}
+
+.review-card {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 22px 20px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.review-front {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.review-word {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.review-phonetic {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.review-source {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.review-cloze {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.75;
+  text-align: left;
+  color: var(--text);
+}
+
+.review-blank {
+  display: inline-block;
+  min-width: 3em;
+  border-bottom: 2px solid var(--accent);
+  color: transparent;
+  user-select: none;
+}
+
+.review-answer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-soft);
+}
+
+.review-muted {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.review-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+.review-actions > .primary {
+  flex: 1;
+}
+
+.rate-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: var(--radius-soft);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.rate-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+.rate-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.rate-key {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.rate-1 {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+.rate-2 {
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--border));
+}
+.rate-3 {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.review-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-faint);
+  flex: none;
+}
+
+.link-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+.link-btn:hover {
+  color: var(--accent);
+}
+
+.review-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+}
+.review-done h3 {
+  margin: 0;
+  font-size: 17px;
+}
+.review-done p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
