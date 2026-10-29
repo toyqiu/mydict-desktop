@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代码安全审查报告 - diff-fast-20261029210143</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Spectral:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+        :root {
+            --paper: #f7f2e8;
+            --paper-2: #fcfaf5;
+            --ink: #1b1a17;
+            --muted: #6e665c;
+            --border: #e1d7c6;
+            --accent: #1f3a5f;
+            --accent-soft: rgba(31, 58, 95, 0.16);
+            --high: #b23a2f;
+            --critical: #7b1a1a;
+            --medium: #d08a27;
+            --low: #2f7e59;
+            --shadow: 0 24px 60px rgba(17, 14, 10, 0.18);
+            --mono: "JetBrains Mono", "Fira Code", monospace;
+            --display: "Chakra Petch", "Trebuchet MS", sans-serif;
+            --body: "Spectral", "Noto Serif SC", "Songti SC", serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: var(--body);
+            color: var(--ink);
+            background-color: #fff;
+            padding: 32px;
+            line-height: 1.6;
+        }
+
+        .report {
+            max-width: 1280px;
+            margin: 0 auto;
+            background: var(--paper-2);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 36px;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .report[data-risk="critical"] {
+            --accent: var(--critical);
+            --accent-soft: rgba(123, 26, 26, 0.14);
+        }
+
+        .report[data-risk="high"] {
+            --accent: var(--high);
+            --accent-soft: rgba(178, 58, 47, 0.14);
+        }
+
+        .report[data-risk="medium"] {
+            --accent: var(--medium);
+            --accent-soft: rgba(208, 138, 39, 0.16);
+        }
+
+        .report[data-risk="low"] {
+            --accent: var(--low);
+            --accent-soft: rgba(47, 126, 89, 0.16);
+        }
+
+        .report[data-risk="clean"] {
+            --accent: var(--low);
+            --accent-soft: rgba(47, 126, 89, 0.16);
+        }
+
+        .report[data-risk="failed"] {
+            --accent: var(--high);
+            --accent-soft: rgba(178, 58, 47, 0.18);
+        }
+
+        .report-header {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 32px;
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 24px;
+            margin-bottom: 28px;
+        }
+
+        .kicker {
+            font-family: var(--display);
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            font-size: 0.72rem;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            font-family: var(--display);
+            font-size: 2.4rem;
+            margin: 0 0 8px;
+        }
+
+        .subtitle {
+            margin: 0 0 20px;
+            color: var(--muted);
+            font-size: 1rem;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px 20px;
+            font-size: 0.9rem;
+        }
+
+        .meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .meta-label {
+            color: var(--muted);
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-family: var(--display);
+        }
+
+        .meta-value {
+            font-weight: 600;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .metric {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px;
+            text-align: center;
+            box-shadow: 0 8px 18px rgba(24, 19, 13, 0.08);
+        }
+
+        .metric-value {
+            font-family: var(--display);
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .metric-label {
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        .metric.high .metric-value { color: var(--high); }
+        .metric.critical .metric-value { color: var(--critical); }
+        .metric.medium .metric-value { color: var(--medium); }
+        .metric.low .metric-value { color: var(--low); }
+
+        .metric.clickable {
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .metric.clickable:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 28px rgba(24, 19, 13, 0.15);
+        }
+
+        .section-title {
+            font-family: var(--display);
+            font-size: 1.5rem;
+            margin: 0 0 14px;
+            border-left: 4px solid var(--accent);
+            padding-left: 12px;
+        }
+
+        .section-title.section-title-lg {
+            font-size: 1.9rem;
+            margin-bottom: 18px;
+        }
+
+        .section-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+
+        .card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px;
+            box-shadow: 0 10px 24px rgba(24, 19, 13, 0.08);
+        }
+
+        section.card + section.card {
+            margin-top: 28px;
+        }
+
+        .product-shape-card {
+            margin-bottom: 28px;
+        }
+
+        .card-header {
+            font-family: var(--display);
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            color: var(--ink);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .data-table th {
+            font-family: var(--display);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+        }
+
+        .data-table th.sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 24px;
+            transition: color 0.2s ease, background-color 0.2s ease;
+        }
+
+        .data-table th.sortable:hover {
+            color: var(--ink);
+            background-color: var(--accent-soft);
+        }
+
+        .data-table th.sortable::after {
+            content: '⇅';
+            position: absolute;
+            right: 8px;
+            opacity: 0.4;
+            font-size: 0.7rem;
+        }
+
+        .data-table th.sortable.asc::after {
+            content: '↑';
+            opacity: 1;
+            color: var(--accent);
+        }
+
+        .data-table th.sortable.desc::after {
+            content: '↓';
+            opacity: 1;
+            color: var(--accent);
+        }
+
+        .data-table tbody tr:nth-child(even) {
+            background: rgba(247, 242, 232, 0.6);
+        }
+
+        .data-table tbody tr.issue-row {
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .data-table tbody tr.issue-row:hover {
+            background: var(--accent-soft);
+        }
+
+        .issue-card.highlight {
+            animation: highlight-pulse 2s ease-out;
+        }
+
+        @keyframes highlight-pulse {
+            0% {
+                box-shadow: 0 0 0 4px var(--accent);
+            }
+            100% {
+                box-shadow: 0 8px 20px rgba(24, 19, 13, 0.08);
+            }
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-box {
+            background: var(--paper-2);
+            border-radius: 18px;
+            max-width: 780px;
+            width: 100%;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 24px 64px rgba(24, 19, 13, 0.25);
+            position: relative;
+            animation: modal-in 0.25s ease-out;
+        }
+
+        @keyframes modal-in {
+            from { opacity: 0; transform: translateY(16px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .modal-close {
+            position: sticky;
+            top: 0;
+            display: flex;
+            justify-content: flex-end;
+            padding: 12px 16px 0;
+            z-index: 1;
+        }
+
+        .modal-close-btn {
+            width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 50%;
+            background: var(--border);
+            color: var(--ink);
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .modal-close-btn:hover {
+            background: var(--muted);
+            color: #fff;
+        }
+
+        .modal-body {
+            padding: 4px 24px 24px;
+        }
+
+        .modal-body .issue-card {
+            margin-bottom: 0;
+            box-shadow: none;
+        }
+
+        .mono {
+            font-family: var(--mono);
+            font-size: 0.82rem;
+        }
+
+        .empty-state {
+            color: var(--muted);
+            font-style: italic;
+        }
+
+        .issues-block {
+            margin: 40px 0 32px;
+        }
+
+        .group-title {
+            font-family: var(--display);
+            font-size: 1.1rem;
+            margin: 20px 0 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .issue-card {
+            border: 1px solid var(--border);
+            border-left: 6px solid var(--accent);
+            border-radius: 14px;
+            padding: 16px 18px;
+            background: #fff;
+            margin-bottom: 16px;
+            box-shadow: 0 8px 20px rgba(24, 19, 13, 0.08);
+        }
+
+        .issue-card.issue-critical {
+            border-left-color: var(--critical);
+            background: #fff2f0;
+        }
+
+        .issue-card.issue-high {
+            border-left-color: var(--high);
+            background: #fff6f4;
+        }
+
+        .issue-card.issue-medium {
+            border-left-color: var(--medium);
+            background: #fff8ea;
+        }
+
+        .issue-card.issue-low {
+            border-left-color: var(--low);
+            background: #f4fbf7;
+        }
+
+        .issue-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .issue-type {
+            font-family: var(--display);
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .issue-id {
+            display: inline-block;
+            margin-right: 8px;
+            padding: 1px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--paper);
+            color: var(--accent);
+            font-size: 0.82rem;
+            font-weight: 600;
+            vertical-align: middle;
+        }
+
+        .issue-info {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            margin-bottom: 14px;
+            font-size: 0.9rem;
+        }
+
+        .issue-info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .issue-info-label {
+            font-family: var(--display);
+            color: #1a1a1a;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .issue-section {
+            margin-bottom: 14px;
+        }
+
+        .issue-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .issue-section-title {
+            font-family: var(--display);
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 4px;
+        }
+
+        .issue-desc {
+            margin: 0;
+            line-height: 1.7;
+        }
+
+        .issue-desc-section {
+            margin: 0 0 8px 0;
+            line-height: 1.7;
+        }
+
+        .issue-desc-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .issue-desc-section strong {
+            color: var(--ink);
+            margin-right: 4px;
+        }
+
+        .issue-code {
+            margin: 0;
+            padding: 14px;
+            background: #1f1c18;
+            color: #f5efe6;
+            border-radius: 10px;
+            font-family: var(--mono);
+            font-size: 0.82rem;
+            overflow-x: auto;
+            border: 1px solid var(--border);
+        }
+
+        .issue-code-fixed {
+            background: #1a2e1a;
+            border-color: var(--low);
+        }
+
+        .issue-recommendation {
+            background: #e8f5e9;
+            border-left: 4px solid var(--low);
+            padding: 12px 14px;
+            border-radius: 10px;
+        }
+
+        .issue-recommendation p {
+            margin: 0 0 8px;
+        }
+
+        .issue-recommendation p:last-child {
+            margin-bottom: 0;
+        }
+
+        .severity-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-family: var(--display);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #fff;
+            background: var(--accent);
+        }
+
+        .severity-critical { background: var(--critical); }
+        .severity-high { background: var(--high); }
+        .severity-medium { background: var(--medium); }
+        .severity-low { background: var(--low); }
+
+        .zero-day-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.65rem;
+            font-family: var(--display);
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #fff;
+            background: linear-gradient(135deg, #6b21a8, #9333ea);
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        /* 单漏洞调用链流程图 */
+        .attack-call-chain {
+            display: flex;
+            flex-direction: column;
+            padding: 10px 12px;
+            background: #f9f7f3;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .chain-node {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-family: var(--mono);
+            font-size: 0.82rem;
+            line-height: 1.5;
+        }
+
+        .chain-node-source {
+            background: rgba(31, 58, 95, 0.10);
+            border-left: 3px solid var(--accent);
+        }
+
+        .chain-node-prop {
+            background: rgba(0, 0, 0, 0.04);
+            border-left: 3px solid var(--border);
+            margin-left: 16px;
+        }
+
+        .chain-node-sink {
+            background: rgba(178, 58, 47, 0.10);
+            border-left: 3px solid var(--high);
+        }
+
+        .chain-node-label {
+            flex-shrink: 0;
+            font-family: var(--display);
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 1px 6px;
+            border-radius: 4px;
+            margin-top: 2px;
+            white-space: nowrap;
+        }
+
+        .chain-node-source .chain-node-label {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .chain-node-prop .chain-node-label {
+            background: var(--muted);
+            color: #fff;
+        }
+
+        .chain-node-sink .chain-node-label {
+            background: var(--high);
+            color: #fff;
+        }
+
+        .chain-node-text {
+            word-break: break-all;
+            color: var(--ink);
+        }
+
+        .chain-arrow {
+            text-align: left;
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1;
+            padding: 3px 0 3px 22px;
+            user-select: none;
+        }
+
+        .chain-trace-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 1px 8px;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-family: var(--display);
+            background: var(--accent-soft);
+            color: var(--accent);
+            margin-left: 6px;
+            vertical-align: middle;
+            font-weight: 600;
+        }
+
+        .poc-content {
+            padding: 8px 0;
+        }
+        .poc-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            font-family: var(--display);
+            margin-bottom: 6px;
+        }
+        .poc-badge.poc-yes {
+            background: rgba(220, 38, 38, 0.12);
+            color: #dc2626;
+        }
+        .poc-badge.poc-conditional {
+            background: rgba(217, 119, 6, 0.12);
+            color: #d97706;
+        }
+        .poc-badge.poc-no {
+            background: rgba(100, 116, 139, 0.15);
+            color: #475569;
+        }
+        .poc-meta {
+            font-size: 0.82rem;
+            color: var(--muted);
+            margin: 4px 0 2px;
+        }
+        .poc-no-reason {
+            color: #475569;
+            font-style: italic;
+        }
+        .poc-pre {
+            margin: 2px 0 6px 18px;
+            font-size: 0.82rem;
+            color: var(--muted);
+        }
+
+        .advice {
+            background: var(--accent-soft);
+            border-left: 4px solid var(--accent);
+            padding: 12px 14px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+        }
+
+        .advice-title {
+            font-family: var(--display);
+            font-size: 0.85rem;
+            margin-bottom: 6px;
+        }
+
+        .code-stack {
+            display: grid;
+            gap: 12px;
+        }
+
+        .code-block {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0;
+            overflow: hidden;
+            background: #1f1c18;
+        }
+
+        .code-block summary {
+            cursor: pointer;
+            padding: 10px 12px;
+            font-family: var(--display);
+            color: #f5efe6;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 14px;
+            color: #f5efe6;
+            font-family: var(--mono);
+            font-size: 0.82rem;
+            overflow-x: auto;
+        }
+
+        .inline-details summary {
+            cursor: pointer;
+            font-family: var(--display);
+            font-size: 0.8rem;
+        }
+
+        .inline-details pre {
+            margin-top: 8px;
+            background: #1f1c18;
+            color: #f5efe6;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: var(--mono);
+            font-size: 0.78rem;
+        }
+
+        .filter-tags {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .filter-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--ink);
+            font-family: var(--display);
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .filter-tag:hover {
+            background: var(--accent-soft);
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .filter-tag.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        .filter-tag-label {
+            display: inline-block;
+        }
+
+        .table-scroll {
+            overflow-x: auto;
+        }
+
+        .verification-guide-section {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 8px;
+        }
+
+        .verification-guide-content {
+            margin-top: 8px;
+        }
+
+        .verification-steps-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .verification-step {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px 14px;
+            transition: border-color 0.2s ease;
+        }
+
+        .verification-step:hover {
+            border-color: #94a3b8;
+        }
+
+        .verification-step-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 4px;
+        }
+
+        .verification-step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 56px;
+            height: 22px;
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            color: #fff;
+            font-size: 0.72rem;
+            font-weight: 700;
+            border-radius: 11px;
+            letter-spacing: 0.04em;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .verification-step-desc {
+            color: #334155;
+            font-size: 0.88rem;
+            line-height: 1.5;
+            flex: 1;
+        }
+
+        .verification-command {
+            background: #1e293b;
+            color: #22d3ee;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 12.5px;
+            overflow-x: auto;
+            margin: 8px 0 0 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.6;
+        }
+
+        .verification-note {
+            font-size: 0.82rem;
+            color: #64748b;
+            margin-top: 12px;
+            padding: 8px 12px;
+            border-left: 3px solid #0ea5e9;
+            background: #f0f9ff;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .report-footer {
+            margin-top: 32px;
+            padding-top: 18px;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        @media (max-width: 980px) {
+            body { padding: 20px; }
+            .report { padding: 24px; }
+            .report-header {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 720px) {
+            h1 { font-size: 2rem; }
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media print {
+            body {
+                background: #fff;
+                padding: 0;
+            }
+            .report {
+                box-shadow: none;
+                border: none;
+                padding: 0;
+            }
+            .issue-card {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="report" data-risk="medium">
+        <header class="report-header">
+            <div class="header-main">
+                <h1>代码安全审查报告</h1>
+                <p class="subtitle">mydict-desktop · 19 个扫描文件 · 1 个风险文件</p>
+                <div class="meta-grid">
+                    <div class="meta-item">
+                        <span class="meta-label">生成时间</span>
+                        <span class="meta-value">2026-10-29 21:19:16</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">项目名称</span>
+                        <span class="meta-value">mydict-desktop</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">审计批次</span>
+                        <span class="meta-value">diff-fast-20261029210143</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">代码分支</span>
+                        <span class="meta-value">main</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">扫描模式</span>
+                        <span class="meta-value">极速扫描</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">项目类型</span>
+                        <span class="meta-value">客户端</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">生成状态</span>
+                        <span class="meta-value">成功</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        
+
+        
+        <section class="card product-shape-card">
+            <div class="card-header">产品形态证据链</div>
+            <p><strong>结论：</strong>客户端</p>
+            <p><strong>判断说明：</strong>客户端：整个仓库是一个由 Tauri v2 打包的本地桌面程序，没有服务端入口（无 HTTP 路由注册、无 Web 框架依赖），全部 #[tauri::command] 命令由本机 WebView 通过 IPC 调用，外部服务只是它访问的第三方 MyDict 服务器。</p>
+            <div><strong>实际举证：</strong><ul><li><div><strong>位置：</strong><span class="mono">src-tauri/tauri.conf.json:3</span></div><div><strong>片段：</strong><span class="mono">&quot;productName&quot;: &quot;MyDict&quot;,</span></div><div><strong>依据：</strong>Tauri 应用配置清单，定义 productName/version/窗口，是桌面客户端打包的唯一入口标志</div></li><li><div><strong>位置：</strong><span class="mono">src-tauri/tauri.conf.json:5</span></div><div><strong>片段：</strong><span class="mono">&quot;identifier&quot;: &quot;com.toyqiu.mydict.desktop&quot;,</span></div><div><strong>依据：</strong>应用标识（反向域名形式的桌面应用 ID），区别于 Web 服务或库</div></li><li><div><strong>位置：</strong><span class="mono">src-tauri/tauri.conf.json:8-10</span></div><div><strong>片段：</strong><span class="mono">&quot;devUrl&quot;: &quot;http://localhost:1420&quot;, ... &quot;frontendDist&quot;: &quot;../dist&quot;</span></div><div><strong>依据：</strong>前端资源被打包进本地二进制（frontendDist 指向本地 dist），不是部署到服务器的 Web 站点</div></li><li><div><strong>位置：</strong><span class="mono">src-tauri/src/main.rs:8</span></div><div><strong>片段：</strong><span class="mono">mydict_desktop_lib::run()</span></div><div><strong>依据：</strong>原生进程入口，直接启动 Tauri 应用主体，说明产物是可执行客户端程序</div></li><li><div><strong>位置：</strong><span class="mono">package.json:15</span></div><div><strong>片段：</strong><span class="mono">&quot;@tauri-apps/api&quot;: &quot;^2.12.0&quot;</span></div><div><strong>依据：</strong>前端只依赖 Tauri IPC SDK（invoke），无 express/fastify/koa 一类服务端框架</div></li></ul></div>
+        </section>
+    
+
+        <section class="metrics-grid">
+            <div class="metric clickable" onclick="filterRiskTable('high')">
+                <div class="metric-value">0</div>
+                <div class="metric-label">高置信度风险</div>
+            </div>
+            <div class="metric clickable" onclick="filterRiskTable('all')">
+                <div class="metric-value">1</div>
+                <div class="metric-label">风险总数</div>
+            </div>
+            <div class="metric critical clickable" onclick="filterRiskTableByLevel('critical')">
+                <div class="metric-value">0</div>
+                <div class="metric-label">严重风险</div>
+            </div>
+            <div class="metric high clickable" onclick="filterRiskTableByLevel('high')">
+                <div class="metric-value">0</div>
+                <div class="metric-label">高危风险</div>
+            </div>
+            <div class="metric medium clickable" onclick="filterRiskTableByLevel('medium')">
+                <div class="metric-value">1</div>
+                <div class="metric-label">中等风险</div>
+            </div>
+            <div class="metric low clickable" onclick="filterRiskTableByLevel('low')">
+                <div class="metric-value">0</div>
+                <div class="metric-label">低危风险</div>
+            </div>
+        </section>
+
+        <section class="section-grid">
+            <div class="card">
+                <div class="card-header">风险类型分布</div>
+                <div class="table-scroll">
+                    <table class="data-table" id="risk-type-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="string" onclick="sortTable(this, 0)">风险类型</th>
+                                <th class="sortable" data-sort="number" onclick="sortTable(this, 1)">数量</th>
+                                <th class="sortable" data-sort="severity" onclick="sortTable(this, 2)">严重程度</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            
+            <tr>
+                <td>跨站脚本攻击</td>
+                <td>1</td>
+                <td><span class="severity-pill severity-medium">中</span></td>
+            </tr>
+        
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="card" id="risk-list-section">
+            <div class="card-header">风险列表</div>
+            <div class="filter-tags">
+                <button class="filter-tag active" data-filter="high" onclick="filterRiskTable('high')">
+                    <span class="filter-tag-label">高置信度</span>
+                </button>
+                <button class="filter-tag" data-filter="all" onclick="filterRiskTable('all')">
+                    <span class="filter-tag-label">全部</span>
+                </button>
+                <button class="filter-tag" data-filter="level-critical" onclick="filterRiskTableByLevel('critical')">
+                    <span class="filter-tag-label">严重</span>
+                </button>
+                <button class="filter-tag" data-filter="level-high" onclick="filterRiskTableByLevel('high')">
+                    <span class="filter-tag-label">高危</span>
+                </button>
+                <button class="filter-tag" data-filter="level-medium" onclick="filterRiskTableByLevel('medium')">
+                    <span class="filter-tag-label">中危</span>
+                </button>
+                <button class="filter-tag" data-filter="level-low" onclick="filterRiskTableByLevel('low')">
+                    <span class="filter-tag-label">低危</span>
+                </button>
+            </div>
+            <div class="table-scroll">
+                <table class="data-table" id="risk-list-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="string" onclick="sortTable(this, 0)">编号</th>
+                            <th class="sortable" data-sort="string" onclick="sortTable(this, 1)">文件</th>
+                            <th class="sortable" data-sort="string" onclick="sortTable(this, 2)">风险类型</th>
+                            <th class="sortable" data-sort="severity" onclick="sortTable(this, 3)">级别</th>
+                            <th class="sortable" data-sort="number" onclick="sortTable(this, 4)">行号</th>
+                            <th class="sortable" data-sort="number" onclick="sortTable(this, 5)">置信度</th>
+                            <th class="sortable" data-sort="string" onclick="sortTable(this, 6)">描述</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+            <tr class="issue-row" data-issue-id="DF20261029210143-000" data-confidence="all" data-severity="medium" onclick="openIssueModal(&quot;DF20261029210143-000&quot;)">
+                <td><span class="mono">DF20261029210143-000</span></td>
+                <td><span class="mono">src/ui-main.ts</span></td>
+                <td title="跨站脚本攻击">跨站脚本攻击</td>
+                <td><span class="severity-pill severity-medium">中</span></td>
+                <td><span class="mono">268</span></td>
+                <td>62</td>
+                <td>主窗口渲染语言标签时，把 chips 直接拼进 innerHTML：`data-lang=&quot;${tab.lang}&quot;&gt;${tab.label}`（第 268-275 行）。chips 的来源是 loadTabs() 里 `api.dictionaries(&#x27;usable&#x27;)` 返回的词典列表，其 lang_from 字段是服务端原样下发的字符串（Rust `DictInfo.lang_from: String`，无白名单/枚举校验），经 langGroupOf() 时未知语言码被**原样返回**，再由 langGroupLabel() 的 `LANG_GROUP_LABELS[group] ?? group` 兜底回退成同一原始字符串，最终未做任何 HTML 转义就进入 innerHTML 的属性和文本位置。因此当被配置的 MyDict 服务器（开发者工具里 server_url 常是局域网明文 http）被攻陷或在链路上被中间人改写，只要返回一条 lang_from 形如 `&quot;&gt;&lt;img src=x onerror=…&gt;` 的词典记录，脚本就会在主窗口 WebView 中执行。该 WebView 拥有全部 29 个 Tauri 命令（tauri.conf.json 的 app.security.csp 为 null，无 CSP 兜底），执行后可直接调用 invoke 读取剪贴板（clipboard_text）、改写设置中的 server_url（save_settings）、用 open_external 打开任意 http(s) 链接、读取 auth_status 的用户名/服务器地址，构成从「服务端数据不可信」到「桌面端本地能力被滥用」的升级链。注：该行本身不是本次 diff 改动行（本次只在其上方的 chips 列表里加入了「生词本」伪标签），属存量问题；因 sink 落在本次变更文件内，按 Fast diff 的文件级口径纳入本次结果。</td>
+            </tr>
+        
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="issues-block">
+            <h2 class="section-title section-title-lg">详细风险列表</h2>
+            <h3 class="group-title">🔴 严重风险</h3>
+            <p class="empty-state">暂无严重风险。</p>
+            <h3 class="group-title">🟠 高危风险</h3>
+            <p class="empty-state">暂无高危风险。</p>
+            <h3 class="group-title">🟡 中危风险</h3>
+            
+        <article class="issue-card issue-medium" id="issue-DF20261029210143-000">
+            <header class="issue-head">
+                <div class="issue-type" title="跨站脚本攻击"><span class="issue-id mono">DF20261029210143-000</span>跨站脚本攻击</div>
+                <span class="severity-pill severity-medium">中</span>
+            </header>
+            <div class="issue-body">
+                <div class="issue-info">
+                    <div class="issue-info-item"><span class="issue-info-label">位置:</span><span class="mono">src/ui-main.ts: 268</span></div>
+                    <div class="issue-info-item"><span class="issue-info-label">置信度:</span><span class="mono">62</span></div>
+                </div>
+                <div class="issue-section">
+                    <div class="issue-section-title">风险描述:</div>
+                    <div class="issue-desc"><p class="issue-desc-section">主窗口渲染语言标签时，把 chips 直接拼进 innerHTML：`data-lang=&quot;${tab.lang}&quot;&gt;${tab.label}`（第 268-275 行）。chips 的来源是 loadTabs() 里 `api.dictionaries(&#x27;usable&#x27;)` 返回的词典列表，其 lang_from 字段是服务端原样下发的字符串（Rust `DictInfo.lang_from: String`，无白名单/枚举校验），经 langGroupOf() 时未知语言码被**原样返回**，再由 langGroupLabel() 的 `LANG_GROUP_LABELS[group] ?? group` 兜底回退成同一原始字符串，最终未做任何 HTML 转义就进入 innerHTML 的属性和文本位置。因此当被配置的 MyDict 服务器（开发者工具里 server_url 常是局域网明文 http）被攻陷或在链路上被中间人改写，只要返回一条 lang_from 形如 `&quot;&gt;&lt;img src=x onerror=…&gt;` 的词典记录，脚本就会在主窗口 WebView 中执行。该 WebView 拥有全部 29 个 Tauri 命令（tauri.conf.json 的 app.security.csp 为 null，无 CSP 兜底），执行后可直接调用 invoke 读取剪贴板（clipboard_text）、改写设置中的 server_url（save_settings）、用 open_external 打开任意 http(s) 链接、读取 auth_status 的用户名/服务器地址，构成从「服务端数据不可信」到「桌面端本地能力被滥用」的升级链。注：该行本身不是本次 diff 改动行（本次只在其上方的 chips 列表里加入了「生词本」伪标签），属存量问题；因 sink 落在本次变更文件内，按 Fast diff 的文件级口径纳入本次结果。</p></div>
+                </div>
+                
+        <div class="issue-section">
+            <div class="issue-section-title">调用链路:<span class="chain-trace-badge">Grep 模式匹配</span></div>
+            <div class="attack-call-chain">
+            <div class="chain-node chain-node-source">
+                <span class="chain-node-label">入口</span>
+                <span class="chain-node-text">GET /api/dict（经 Rust commands `dictionaries` 转发）响应中的 lang_from 字段，服务端完全可控、客户端无白名单</span>
+            </div>
+            <div class="chain-arrow">↓</div>
+        
+            <div class="chain-node chain-node-prop">
+                <span class="chain-node-label">传播</span>
+                <span class="chain-node-text">src-tauri/src/mydict.rs: dictionaries() 反序列化为 Vec&lt;PublicDict&gt;，lang_from 为 String 无校验</span>
+            </div>
+            <div class="chain-arrow">↓</div>
+        
+            <div class="chain-node chain-node-prop">
+                <span class="chain-node-label">传播</span>
+                <span class="chain-node-text">src/ui-main.ts loadTabs(): lang = langGroupOf(d.lang_from) —— 非 zh 系语言码原样返回</span>
+            </div>
+            <div class="chain-arrow">↓</div>
+        
+            <div class="chain-node chain-node-prop">
+                <span class="chain-node-label">传播</span>
+                <span class="chain-node-text">src/langs.ts langGroupLabel(): LANG_GROUP_LABELS[group] ?? group —— 未知分组回退为原始字符串</span>
+            </div>
+            <div class="chain-arrow">↓</div>
+        
+            <div class="chain-node chain-node-prop">
+                <span class="chain-node-label">传播</span>
+                <span class="chain-node-text">src/ui-main.ts renderTabs(): chips.push({ lang, label })</span>
+            </div>
+            <div class="chain-arrow">↓</div>
+        
+            <div class="chain-node chain-node-prop">
+                <span class="chain-node-label">传播</span>
+                <span class="chain-node-text">src/ui-main.ts:268 langsRow.innerHTML = chips.map(tab =&gt; `...${tab.label}...data-lang=&quot;${tab.lang}&quot;`)</span>
+            </div>
+            <div class="chain-arrow">↓</div>
+        
+            <div class="chain-node chain-node-sink">
+                <span class="chain-node-label">危险点</span>
+                <span class="chain-node-text">src/ui-main.ts:268 langsRow.innerHTML（HTML 字符串拼接）</span>
+            </div>
+        </div>
+        </div>
+    
+                
+                
+        <div class="issue-section verification-guide-section">
+            <div class="issue-section-title">漏洞验证指引:</div>
+            <div class="verification-guide-content">
+                <div class="verification-steps-list">
+                    
+                <div class="verification-step">
+                    <div class="verification-step-header">
+                        <span class="verification-step-number">步骤 1</span>
+                        <span class="verification-step-desc">查看风险代码位置</span>
+                    </div>
+                    <pre class="verification-command"><code>sed -n &#x27;263,273p&#x27; src/ui-main.ts</code></pre>
+                </div>
+            
+                </div>
+                <p class="verification-note">请在授权的安全测试环境中执行验证。</p>
+            </div>
+        </div>
+    
+                
+            <div class="issue-section">
+                <div class="issue-section-title">风险代码:</div>
+                <pre class="issue-code"><code>langsRow.innerHTML = chips</code></pre>
+            </div>
+        
+                
+            <div class="issue-section">
+                <div class="issue-section-title">修复建议:</div>
+                <div class="issue-recommendation"><p>1) 不要把服务端字符串拼进 innerHTML：把 langsRow.innerHTML 模板改成 DOM 构建（document.createElement(&#x27;button&#x27;) + el.textContent = tab.label，data-lang 用 el.dataset.lang 赋值），或对 tab.lang/tab.label 统一走已有的 escapeHtml() 再插入；2) 更根本的做法是在 Rust 侧给 lang_from 加白名单/正则校验（如 `^[a-z]{2,3}(-[A-Za-z]{2,8})?$`，不匹配就归到 other），前端 langGroupOf() 也只接受 `[A-Za-z-]` 字符集；3) 建议顺带把 tauri.conf.json 的 app.security.csp 从 null 改为最小策略（default-src &#x27;self&#x27;; script-src &#x27;self&#x27;; img-src &#x27;self&#x27; data: http: https:），让任何漏网的 HTML 注入无法执行内联脚本。</p></div>
+            </div>
+        
+                
+            </div>
+        </article>
+    
+            <h3 class="group-title">🟢 低危风险</h3>
+            <p class="empty-state">暂无低危风险。</p>
+        </section>
+
+        <div class="modal-overlay" id="issueModal" onclick="closeIssueModal()">
+            <div class="modal-box" onclick="event.stopPropagation()">
+                <div class="modal-close"><button class="modal-close-btn" onclick="closeIssueModal()">&times;</button></div>
+                <div class="modal-body" id="issueModalBody"></div>
+            </div>
+        </div>
+
+        <footer class="report-footer">
+            <div>内容由 AI 生成，仅供参考</div>
+        </footer>
+    </div>
+    <script>
+        function openIssueModal(issueId) {
+            var source = document.getElementById('issue-' + issueId);
+            if (!source) return;
+            var body = document.getElementById('issueModalBody');
+            while (body.firstChild) body.removeChild(body.firstChild);
+            var clone = source.cloneNode(true);
+            clone.removeAttribute('id');
+            body.appendChild(clone);
+            document.getElementById('issueModal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeIssueModal() {
+            document.getElementById('issueModal').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeIssueModal();
+        });
+
+        function sortTable(header, columnIndex) {
+            const table = header.closest('table');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const sortType = header.dataset.sort || 'string';
+            
+            // Severity order mapping (critical > high > medium > low)
+            const severityOrder = {
+                '严重': 4, 'critical': 4, 'CRITICAL': 4,
+                '高': 3, 'high': 3, 'HIGH': 3,
+                '中': 2, 'medium': 2, 'MEDIUM': 2,
+                '低': 1, 'low': 1, 'LOW': 1
+            };
+            
+            // Check if already sorted and determine direction
+            const isAsc = header.classList.contains('asc');
+            const direction = isAsc ? -1 : 1;
+            
+            // Remove sort classes from all headers in this table
+            table.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('asc', 'desc');
+            });
+            
+            // Add appropriate class to current header
+            header.classList.add(isAsc ? 'desc' : 'asc');
+            
+            // Sort rows
+            rows.sort((a, b) => {
+                const aCell = a.cells[columnIndex];
+                const bCell = b.cells[columnIndex];
+                
+                if (!aCell || !bCell) return 0;
+                
+                let aVal = aCell.textContent.trim();
+                let bVal = bCell.textContent.trim();
+                
+                if (sortType === 'number') {
+                    aVal = parseFloat(aVal) || 0;
+                    bVal = parseFloat(bVal) || 0;
+                    return (aVal - bVal) * direction;
+                } else if (sortType === 'severity') {
+                    aVal = severityOrder[aVal] || 0;
+                    bVal = severityOrder[bVal] || 0;
+                    return (aVal - bVal) * direction;
+                } else {
+                    return aVal.localeCompare(bVal, 'zh-CN') * direction;
+                }
+            });
+            
+            // Re-append sorted rows
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        function filterRiskTable(filterType, scroll) {
+            const table = document.getElementById('risk-list-table');
+            const rows = table.querySelectorAll('tbody tr');
+            const filterButtons = document.querySelectorAll('.filter-tag');
+
+            // 更新按钮状态（同时清除 level 过滤的 active 状态）
+            filterButtons.forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.filter === filterType) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // 过滤行
+            rows.forEach(row => {
+                const confidence = row.dataset.confidence;
+                if (filterType === 'high') {
+                    row.style.display = confidence === 'high' ? '' : 'none';
+                } else {
+                    row.style.display = '';
+                }
+            });
+
+            // 滚动到风险列表
+            if (scroll !== false) {
+                document.getElementById('risk-list-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        function filterRiskTableByLevel(level) {
+            const table = document.getElementById('risk-list-table');
+            const rows = table.querySelectorAll('tbody tr');
+            const filterButtons = document.querySelectorAll('.filter-tag');
+
+            // 更新按钮状态（同时清除 confidence 过滤的 active 状态）
+            filterButtons.forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.filter === 'level-' + level) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // 按风险级别过滤
+            rows.forEach(row => {
+                const severity = row.dataset.severity;
+                row.style.display = severity === level ? '' : 'none';
+            });
+
+            // 滚动到风险列表
+            document.getElementById('risk-list-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        // 页面加载时初始化过滤（默认显示高置信度）
+        document.addEventListener('DOMContentLoaded', function() {
+            filterRiskTable('high', false);
+        });
+    </script>
+    <script id="security-scan-report-data" type="application/json">{"pluginName": "security-scan", "pluginVersion": "3.5.14", "project_type": "客户端", "productCategory": "客户端", "productSubtype": "Tauri v2 桌面查词器（Rust 后端 + WebView 前端，兼带 Android 目标）", "productShape": "客户端", "productShapeDecision": "客户端：整个仓库是一个由 Tauri v2 打包的本地桌面程序，没有服务端入口（无 HTTP 路由注册、无 Web 框架依赖），全部 #[tauri::command] 命令由本机 WebView 通过 IPC 调用，外部服务只是它访问的第三方 MyDict 服务器。", "productShapeEvidenceChain": {"evidence": [{"path": "src-tauri/tauri.conf.json", "line": 3, "snippet": "\"productName\": \"MyDict\",", "reason": "Tauri 应用配置清单，定义 productName/version/窗口，是桌面客户端打包的唯一入口标志"}, {"path": "src-tauri/tauri.conf.json", "line": 5, "snippet": "\"identifier\": \"com.toyqiu.mydict.desktop\",", "reason": "应用标识（反向域名形式的桌面应用 ID），区别于 Web 服务或库"}, {"path": "src-tauri/tauri.conf.json", "lines": "8-10", "snippet": "\"devUrl\": \"http://localhost:1420\", ... \"frontendDist\": \"../dist\"", "reason": "前端资源被打包进本地二进制（frontendDist 指向本地 dist），不是部署到服务器的 Web 站点"}, {"path": "src-tauri/src/main.rs", "line": 8, "snippet": "mydict_desktop_lib::run()", "reason": "原生进程入口，直接启动 Tauri 应用主体，说明产物是可执行客户端程序"}, {"path": "package.json", "line": 15, "snippet": "\"@tauri-apps/api\": \"^2.12.0\"", "reason": "前端只依赖 Tauri IPC SDK（invoke），无 express/fastify/koa 一类服务端框架"}, {"path": "src-tauri/src/lib.rs", "line": 124, "snippet": "#[tauri::command]", "reason": "对外能力全部暴露为 Tauri IPC 命令（共 29 处），由本机 WebView 调用，无 HTTP 路由层"}, {"path": "src-tauri/Cargo.toml", "line": 19, "snippet": "tauri = { version = \"2\", features = [\"tray-icon\", \"image-png\"] }", "reason": "依赖 tray-icon（托盘）等桌面特性，进一步确认是桌面客户端形态"}], "conflicts": []}, "scanMode": "极速扫描", "auditBatchId": "diff-fast-20261029210143", "scanTime": "2026-10-29 21:18:15", "generatedAt": "2026-10-29 21:19:16", "codeBranch": "main", "projectName": "mydict-desktop", "success": true, "earlyExitReason": "", "skipDetail": "", "riskStatistics": {"highConfidenceRisk": 0, "totalRisk": 1, "criticalRisk": 0, "highRisk": 0, "mediumRisk": 1, "lowRisk": 0, "scanFiles": 19, "riskFiles": 1}, "findings": [{"findingId": "DF20261029210143-000", "riskType": "跨站脚本攻击", "severity": "medium", "filePath": "src/ui-main.ts", "lineNumber": 268, "confidence": 62, "title": "跨站脚本攻击", "description": "主窗口渲染语言标签时，把 chips 直接拼进 innerHTML：`data-lang=\"${tab.lang}\">${tab.label}`（第 268-275 行）。chips 的来源是 loadTabs() 里 `api.dictionaries('usable')` 返回的词典列表，其 lang_from 字段是服务端原样下发的字符串（Rust `DictInfo.lang_from: String`，无白名单/枚举校验），经 langGroupOf() 时未知语言码被**原样返回**，再由 langGroupLabel() 的 `LANG_GROUP_LABELS[group] ?? group` 兜底回退成同一原始字符串，最终未做任何 HTML 转义就进入 innerHTML 的属性和文本位置。因此当被配置的 MyDict 服务器（开发者工具里 server_url 常是局域网明文 http）被攻陷或在链路上被中间人改写，只要返回一条 lang_from 形如 `\"><img src=x onerror=…>` 的词典记录，脚本就会在主窗口 WebView 中执行。该 WebView 拥有全部 29 个 Tauri 命令（tauri.conf.json 的 app.security.csp 为 null，无 CSP 兜底），执行后可直接调用 invoke 读取剪贴板（clipboard_text）、改写设置中的 server_url（save_settings）、用 open_external 打开任意 http(s) 链接、读取 auth_status 的用户名/服务器地址，构成从「服务端数据不可信」到「桌面端本地能力被滥用」的升级链。注：该行本身不是本次 diff 改动行（本次只在其上方的 chips 列表里加入了「生词本」伪标签），属存量问题；因 sink 落在本次变更文件内，按 Fast diff 的文件级口径纳入本次结果。", "attackScenario": "", "recommendation": "1) 不要把服务端字符串拼进 innerHTML：把 langsRow.innerHTML 模板改成 DOM 构建（document.createElement('button') + el.textContent = tab.label，data-lang 用 el.dataset.lang 赋值），或对 tab.lang/tab.label 统一走已有的 escapeHtml() 再插入；2) 更根本的做法是在 Rust 侧给 lang_from 加白名单/正则校验（如 `^[a-z]{2,3}(-[A-Za-z]{2,8})?$`，不匹配就归到 other），前端 langGroupOf() 也只接受 `[A-Za-z-]` 字符集；3) 建议顺带把 tauri.conf.json 的 app.security.csp 从 null 改为最小策略（default-src 'self'; script-src 'self'; img-src 'self' data: http: https:），让任何漏网的 HTML 注入无法执行内联脚本。", "riskCode": "langsRow.innerHTML = chips", "fixedCode": "", "sourceAgent": "light-inline", "auditedBy": ["light-inline"], "discoveryMethod": "", "verificationStatus": "inline-verified", "challengeVerdict": "", "traceMethod": "Grep+Read", "confidenceBreakdown": {}, "confidenceCeiling": "", "confidenceCeilingReason": "", "defenses": [], "attackPayload": "", "attackChain": {"source": "GET /api/dict（经 Rust commands `dictionaries` 转发）响应中的 lang_from 字段，服务端完全可控、客户端无白名单", "propagation": ["src-tauri/src/mydict.rs: dictionaries() 反序列化为 Vec<PublicDict>，lang_from 为 String 无校验", "src/ui-main.ts loadTabs(): lang = langGroupOf(d.lang_from) —— 非 zh 系语言码原样返回", "src/langs.ts langGroupLabel(): LANG_GROUP_LABELS[group] ?? group —— 未知分组回退为原始字符串", "src/ui-main.ts renderTabs(): chips.push({ lang, label })", "src/ui-main.ts:268 langsRow.innerHTML = chips.map(tab => `...${tab.label}...data-lang=\"${tab.lang}\"`)"], "sink": "src/ui-main.ts:268 langsRow.innerHTML（HTML 字符串拼接）", "traceMethod": "Grep+Read"}, "callChain": [], "component": "", "currentVersion": "", "fixedVersion": "", "cve": "", "cwe": "CWE-79", "source": "", "reasoning": "", "dependencyFile": "", "manifestFile": "", "mergedId": "", "isZeroDay": false, "humanReviewRequired": false, "originalSeverity": ""}], "files": [{"issues": 1}]}</script>
+</body>
+</html>

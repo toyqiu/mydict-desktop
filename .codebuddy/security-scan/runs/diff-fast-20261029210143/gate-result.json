@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "batchId": "diff-fast-20261029210143",
+  "evaluatedAt": "2026-10-29T21:19:22.647420+08:00",
+  "gateMode": "warn",
+  "gateStatus": "pass",
+  "summary": {
+    "totalFindings": 1,
+    "criticalRisk": 0,
+    "highRisk": 0,
+    "mediumRisk": 1,
+    "lowRisk": 0,
+    "highConfidenceCount": 0
+  },
+  "violations": [],
+  "passedRules": [
+    "high_severity_threshold",
+    "high_confidence_threshold",
+    "total_issues_threshold (disabled)",
+    "fix_rate_threshold (disabled)"
+  ],
+  "message": "门禁通过：本次扫描结果符合安全策略要求。",
+  "runId": "diff-fast-20261029210143",
+  "sessionStartedAt": 1793278903.1832128,
+  "loadedFiles": [
+    "merged-scan.json"
+  ]
+}

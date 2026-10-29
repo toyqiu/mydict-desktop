@@ -1,0 +1,135 @@
+{
+  "pluginName": "security-scan",
+  "pluginVersion": "3.5.14",
+  "project_type": "客户端",
+  "productCategory": "客户端",
+  "productSubtype": "Tauri v2 桌面查词器（Rust 后端 + WebView 前端，兼带 Android 目标）",
+  "productShape": "客户端",
+  "productShapeDecision": "客户端：整个仓库是一个由 Tauri v2 打包的本地桌面程序，没有服务端入口（无 HTTP 路由注册、无 Web 框架依赖），全部 #[tauri::command] 命令由本机 WebView 通过 IPC 调用，外部服务只是它访问的第三方 MyDict 服务器。",
+  "productShapeEvidenceChain": {
+    "evidence": [
+      {
+        "path": "src-tauri/tauri.conf.json",
+        "line": 3,
+        "snippet": "\"productName\": \"MyDict\",",
+        "reason": "Tauri 应用配置清单，定义 productName/version/窗口，是桌面客户端打包的唯一入口标志"
+      },
+      {
+        "path": "src-tauri/tauri.conf.json",
+        "line": 5,
+        "snippet": "\"identifier\": \"com.toyqiu.mydict.desktop\",",
+        "reason": "应用标识（反向域名形式的桌面应用 ID），区别于 Web 服务或库"
+      },
+      {
+        "path": "src-tauri/tauri.conf.json",
+        "lines": "8-10",
+        "snippet": "\"devUrl\": \"http://localhost:1420\", ... \"frontendDist\": \"../dist\"",
+        "reason": "前端资源被打包进本地二进制（frontendDist 指向本地 dist），不是部署到服务器的 Web 站点"
+      },
+      {
+        "path": "src-tauri/src/main.rs",
+        "line": 8,
+        "snippet": "mydict_desktop_lib::run()",
+        "reason": "原生进程入口，直接启动 Tauri 应用主体，说明产物是可执行客户端程序"
+      },
+      {
+        "path": "package.json",
+        "line": 15,
+        "snippet": "\"@tauri-apps/api\": \"^2.12.0\"",
+        "reason": "前端只依赖 Tauri IPC SDK（invoke），无 express/fastify/koa 一类服务端框架"
+      },
+      {
+        "path": "src-tauri/src/lib.rs",
+        "line": 124,
+        "snippet": "#[tauri::command]",
+        "reason": "对外能力全部暴露为 Tauri IPC 命令（共 29 处），由本机 WebView 调用，无 HTTP 路由层"
+      },
+      {
+        "path": "src-tauri/Cargo.toml",
+        "line": 19,
+        "snippet": "tauri = { version = \"2\", features = [\"tray-icon\", \"image-png\"] }",
+        "reason": "依赖 tray-icon（托盘）等桌面特性，进一步确认是桌面客户端形态"
+      }
+    ],
+    "conflicts": []
+  },
+  "scanMode": "极速扫描",
+  "auditBatchId": "diff-fast-20261029210143",
+  "scanTime": "2026-10-29 21:18:15",
+  "generatedAt": "2026-10-29 21:19:16",
+  "codeBranch": "main",
+  "projectName": "mydict-desktop",
+  "success": true,
+  "earlyExitReason": "",
+  "skipDetail": "",
+  "riskStatistics": {
+    "highConfidenceRisk": 0,
+    "totalRisk": 1,
+    "criticalRisk": 0,
+    "highRisk": 0,
+    "mediumRisk": 1,
+    "lowRisk": 0,
+    "scanFiles": 19,
+    "riskFiles": 1
+  },
+  "findings": [
+    {
+      "findingId": "DF20261029210143-000",
+      "riskType": "跨站脚本攻击",
+      "severity": "medium",
+      "filePath": "src/ui-main.ts",
+      "lineNumber": 268,
+      "confidence": 62,
+      "title": "跨站脚本攻击",
+      "description": "主窗口渲染语言标签时，把 chips 直接拼进 innerHTML：`data-lang=\"${tab.lang}\">${tab.label}`（第 268-275 行）。chips 的来源是 loadTabs() 里 `api.dictionaries('usable')` 返回的词典列表，其 lang_from 字段是服务端原样下发的字符串（Rust `DictInfo.lang_from: String`，无白名单/枚举校验），经 langGroupOf() 时未知语言码被**原样返回**，再由 langGroupLabel() 的 `LANG_GROUP_LABELS[group] ?? group` 兜底回退成同一原始字符串，最终未做任何 HTML 转义就进入 innerHTML 的属性和文本位置。因此当被配置的 MyDict 服务器（开发者工具里 server_url 常是局域网明文 http）被攻陷或在链路上被中间人改写，只要返回一条 lang_from 形如 `\"><img src=x onerror=…>` 的词典记录，脚本就会在主窗口 WebView 中执行。该 WebView 拥有全部 29 个 Tauri 命令（tauri.conf.json 的 app.security.csp 为 null，无 CSP 兜底），执行后可直接调用 invoke 读取剪贴板（clipboard_text）、改写设置中的 server_url（save_settings）、用 open_external 打开任意 http(s) 链接、读取 auth_status 的用户名/服务器地址，构成从「服务端数据不可信」到「桌面端本地能力被滥用」的升级链。注：该行本身不是本次 diff 改动行（本次只在其上方的 chips 列表里加入了「生词本」伪标签），属存量问题；因 sink 落在本次变更文件内，按 Fast diff 的文件级口径纳入本次结果。",
+      "attackScenario": "",
+      "recommendation": "1) 不要把服务端字符串拼进 innerHTML：把 langsRow.innerHTML 模板改成 DOM 构建（document.createElement('button') + el.textContent = tab.label，data-lang 用 el.dataset.lang 赋值），或对 tab.lang/tab.label 统一走已有的 escapeHtml() 再插入；2) 更根本的做法是在 Rust 侧给 lang_from 加白名单/正则校验（如 `^[a-z]{2,3}(-[A-Za-z]{2,8})?$`，不匹配就归到 other），前端 langGroupOf() 也只接受 `[A-Za-z-]` 字符集；3) 建议顺带把 tauri.conf.json 的 app.security.csp 从 null 改为最小策略（default-src 'self'; script-src 'self'; img-src 'self' data: http: https:），让任何漏网的 HTML 注入无法执行内联脚本。",
+      "riskCode": "langsRow.innerHTML = chips",
+      "fixedCode": "",
+      "sourceAgent": "light-inline",
+      "auditedBy": [
+        "light-inline"
+      ],
+      "discoveryMethod": "",
+      "verificationStatus": "inline-verified",
+      "challengeVerdict": "",
+      "traceMethod": "Grep+Read",
+      "confidenceBreakdown": {},
+      "confidenceCeiling": "",
+      "confidenceCeilingReason": "",
+      "defenses": [],
+      "attackPayload": "",
+      "attackChain": {
+        "source": "GET /api/dict（经 Rust commands `dictionaries` 转发）响应中的 lang_from 字段，服务端完全可控、客户端无白名单",
+        "propagation": [
+          "src-tauri/src/mydict.rs: dictionaries() 反序列化为 Vec<PublicDict>，lang_from 为 String 无校验",
+          "src/ui-main.ts loadTabs(): lang = langGroupOf(d.lang_from) —— 非 zh 系语言码原样返回",
+          "src/langs.ts langGroupLabel(): LANG_GROUP_LABELS[group] ?? group —— 未知分组回退为原始字符串",
+          "src/ui-main.ts renderTabs(): chips.push({ lang, label })",
+          "src/ui-main.ts:268 langsRow.innerHTML = chips.map(tab => `...${tab.label}...data-lang=\"${tab.lang}\"`)"
+        ],
+        "sink": "src/ui-main.ts:268 langsRow.innerHTML（HTML 字符串拼接）",
+        "traceMethod": "Grep+Read"
+      },
+      "callChain": [],
+      "component": "",
+      "currentVersion": "",
+      "fixedVersion": "",
+      "cve": "",
+      "cwe": "CWE-79",
+      "source": "",
+      "reasoning": "",
+      "dependencyFile": "",
+      "manifestFile": "",
+      "mergedId": "",
+      "isZeroDay": false,
+      "humanReviewRequired": false,
+      "originalSeverity": ""
+    }
+  ],
+  "files": [
+    {
+      "issues": 1
+    }
+  ]
+}

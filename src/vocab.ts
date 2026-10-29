@@ -253,10 +253,15 @@ export function mountVocabView(options: VocabViewOptions): VocabView {
         )
         .join('')
     } else {
-      actions.innerHTML = '<button type="button" class="primary" data-role="show">显示答案（空格）</button>'
+      actions.innerHTML =
+        '<button type="button" class="primary" data-role="show">显示答案<span class="key-hint">（空格）</span></button>'
     }
 
     reviewHost.querySelector('[data-role="quit"]')?.addEventListener('click', () => exitReview())
+    // 触屏没有空格键：点卡片正面翻面
+    if (!revealed) {
+      reviewHost.querySelector('.review-front')?.addEventListener('click', () => reveal())
+    }
     reviewHost.querySelector<HTMLButtonElement>('[data-role="show"]')?.addEventListener('click', () => reveal())
     reviewHost.querySelectorAll<HTMLButtonElement>('button[data-rating]').forEach((btn) => {
       btn.addEventListener('click', () => void rate(Number(btn.dataset.rating)))
@@ -328,6 +333,10 @@ export function mountVocabView(options: VocabViewOptions): VocabView {
     `
     reviewHost.querySelector('[data-role="again"]')?.addEventListener('click', () => void startReview())
     reviewHost.querySelector('[data-role="quit"]')?.addEventListener('click', () => exitReview())
+    // 触屏没有空格键：点卡片正面翻面
+    if (!revealed) {
+      reviewHost.querySelector('.review-front')?.addEventListener('click', () => reveal())
+    }
     void refresh()
   }
 

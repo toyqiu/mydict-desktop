@@ -1,0 +1,12 @@
+{
+  "violations": [],
+  "minRatio": 0.3,
+  "checkedFields": [
+    "riskType",
+    "description",
+    "recommendation",
+    "title",
+    "attackScenario"
+  ],
+  "generatedAt": "2026-10-29T13:19:16.924921+00:00"
+}

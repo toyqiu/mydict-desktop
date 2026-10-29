@@ -1,0 +1,14 @@
+{
+  "batchId": "diff-fast-20261029210143",
+  "scanMode": "fast",
+  "command": "diff",
+  "totalFiles": 19,
+  "riskFiles": 1,
+  "totalFindings": 1,
+  "criticalRisk": 0,
+  "highRisk": 0,
+  "mediumRisk": 1,
+  "lowRisk": 0,
+  "runId": "diff-fast-20261029210143",
+  "sessionStartedAt": 1793278903.1832128
+}

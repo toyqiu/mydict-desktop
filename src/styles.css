@@ -752,3 +752,51 @@ body {
   color: var(--text-secondary);
   font-size: 13px;
 }
+
+/* ---------- 手机（Android 单窗口） ---------- */
+
+@media (max-width: 640px) {
+  .vocab-host {
+    padding: 10px 12px 12px;
+    gap: 8px;
+  }
+
+  .vocab-top {
+    gap: 8px;
+  }
+
+  .vocab-search {
+    width: 112px;
+  }
+
+  .vocab-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  /* 词典名在窄屏让位给词和状态 */
+  .vocab-dict {
+    display: none;
+  }
+
+  .review-card {
+    padding: 16px 12px;
+  }
+
+  .review-word {
+    font-size: 24px;
+  }
+
+  .review-cloze {
+    font-size: 16px;
+  }
+
+  /* 触屏没有键盘，评分键做大一些，数字提示藏掉 */
+  .rate-btn {
+    padding: 12px 4px;
+  }
+
+  .rate-key,
+  .key-hint {
+    display: none;
+  }
+}

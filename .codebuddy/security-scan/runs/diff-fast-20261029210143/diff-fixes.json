@@ -1,0 +1,9 @@
+{
+  "generatedAt": "2026-10-29T21:18:18+08:00",
+  "base": "HEAD^",
+  "head": "HEAD",
+  "mode": "",
+  "commit": "HEAD^..HEAD",
+  "fixedSinkLocations": [],
+  "totalFixed": 0
+}

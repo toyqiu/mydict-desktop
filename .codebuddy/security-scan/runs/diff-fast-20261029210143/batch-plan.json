@@ -1,0 +1,123 @@
+{
+  "total_files": 19,
+  "scan_mode": "fast",
+  "framework": "unknown",
+  "project_type": "客户端",
+  "project_type_code": "client",
+  "product_category": "桌面应用",
+  "product_subtype": "Tauri v2 桌面查词器（Rust 后端 + WebView 前端，兼带 Android 目标）",
+  "product_shape": "客户端",
+  "product_shape_decision": "客户端：整个仓库是一个由 Tauri v2 打包的本地桌面程序，没有服务端入口（无 HTTP 路由注册、无 Web 框架依赖），全部 #[tauri::command] 命令由本机 WebView 通过 IPC 调用，外部服务只是它访问的第三方 MyDict 服务器。",
+  "product_shape_evidence_chain": {
+    "evidence": [
+      {
+        "path": "src-tauri/tauri.conf.json",
+        "line": 3,
+        "snippet": "\"productName\": \"MyDict\",",
+        "reason": "Tauri 应用配置清单，定义 productName/version/窗口，是桌面客户端打包的唯一入口标志"
+      },
+      {
+        "path": "src-tauri/tauri.conf.json",
+        "line": 5,
+        "snippet": "\"identifier\": \"com.toyqiu.mydict.desktop\",",
+        "reason": "应用标识（反向域名形式的桌面应用 ID），区别于 Web 服务或库"
+      },
+      {
+        "path": "src-tauri/tauri.conf.json",
+        "lines": "8-10",
+        "snippet": "\"devUrl\": \"http://localhost:1420\", ... \"frontendDist\": \"../dist\"",
+        "reason": "前端资源被打包进本地二进制（frontendDist 指向本地 dist），不是部署到服务器的 Web 站点"
+      },
+      {
+        "path": "src-tauri/src/main.rs",
+        "line": 8,
+        "snippet": "mydict_desktop_lib::run()",
+        "reason": "原生进程入口，直接启动 Tauri 应用主体，说明产物是可执行客户端程序"
+      },
+      {
+        "path": "package.json",
+        "line": 15,
+        "snippet": "\"@tauri-apps/api\": \"^2.12.0\"",
+        "reason": "前端只依赖 Tauri IPC SDK（invoke），无 express/fastify/koa 一类服务端框架"
+      },
+      {
+        "path": "src-tauri/src/lib.rs",
+        "line": 124,
+        "snippet": "#[tauri::command]",
+        "reason": "对外能力全部暴露为 Tauri IPC 命令（共 29 处），由本机 WebView 调用，无 HTTP 路由层"
+      },
+      {
+        "path": "src-tauri/Cargo.toml",
+        "line": 19,
+        "snippet": "tauri = { version = \"2\", features = [\"tray-icon\", \"image-png\"] }",
+        "reason": "依赖 tray-icon（托盘）等桌面特性，进一步确认是桌面客户端形态"
+      }
+    ],
+    "conflicts": []
+  },
+  "product_shape_info": {
+    "project_type": "客户端",
+    "project_type_code": "client",
+    "product_shape": "客户端",
+    "product_category": "桌面应用",
+    "product_subtype": "Tauri v2 桌面查词器（Rust 后端 + WebView 前端，兼带 Android 目标）",
+    "product_shape_decision": "客户端：整个仓库是一个由 Tauri v2 打包的本地桌面程序，没有服务端入口（无 HTTP 路由注册、无 Web 框架依赖），全部 #[tauri::command] 命令由本机 WebView 通过 IPC 调用，外部服务只是它访问的第三方 MyDict 服务器。",
+    "product_shape_evidence_chain": {
+      "evidence": [
+        {
+          "path": "src-tauri/tauri.conf.json",
+          "line": 3,
+          "snippet": "\"productName\": \"MyDict\",",
+          "reason": "Tauri 应用配置清单，定义 productName/version/窗口，是桌面客户端打包的唯一入口标志"
+        },
+        {
+          "path": "src-tauri/tauri.conf.json",
+          "line": 5,
+          "snippet": "\"identifier\": \"com.toyqiu.mydict.desktop\",",
+          "reason": "应用标识（反向域名形式的桌面应用 ID），区别于 Web 服务或库"
+        },
+        {
+          "path": "src-tauri/tauri.conf.json",
+          "lines": "8-10",
+          "snippet": "\"devUrl\": \"http://localhost:1420\", ... \"frontendDist\": \"../dist\"",
+          "reason": "前端资源被打包进本地二进制（frontendDist 指向本地 dist），不是部署到服务器的 Web 站点"
+        },
+        {
+          "path": "src-tauri/src/main.rs",
+          "line": 8,
+          "snippet": "mydict_desktop_lib::run()",
+          "reason": "原生进程入口，直接启动 Tauri 应用主体，说明产物是可执行客户端程序"
+        },
+        {
+          "path": "package.json",
+          "line": 15,
+          "snippet": "\"@tauri-apps/api\": \"^2.12.0\"",
+          "reason": "前端只依赖 Tauri IPC SDK（invoke），无 express/fastify/koa 一类服务端框架"
+        },
+        {
+          "path": "src-tauri/src/lib.rs",
+          "line": 124,
+          "snippet": "#[tauri::command]",
+          "reason": "对外能力全部暴露为 Tauri IPC 命令（共 29 处），由本机 WebView 调用，无 HTTP 路由层"
+        },
+        {
+          "path": "src-tauri/Cargo.toml",
+          "line": 19,
+          "snippet": "tauri = { version = \"2\", features = [\"tray-icon\", \"image-png\"] }",
+          "reason": "依赖 tray-icon（托盘）等桌面特性，进一步确认是桌面客户端形态"
+        }
+      ],
+      "conflicts": []
+    },
+    "trust_boundary_notes": "外部信任边界有两条：(1) 用户配置的 MyDict 服务器（server_url，可为局域网 http），其返回的 JSON/HTML 全部进入前端渲染与沙箱 iframe；(2) 词典自带的词条 HTML 与脚本。本机 WebView 拥有全部 IPC 命令，且 tauri.conf.json 的 app.security.csp 为 null。"
+  },
+  "entry_points": 0,
+  "scan_timestamp": "2026-10-29T21:18:15+08:00",
+  "diffRange": {
+    "base": "",
+    "head": "HEAD",
+    "mode": "",
+    "commit": ""
+  },
+  "options": {}
+}

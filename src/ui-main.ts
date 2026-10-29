@@ -268,8 +268,8 @@ function renderTabs(): void {
   langsRow.innerHTML = chips
     .map(
       (tab) => `
-      <button class="lang-chip ${tab.lang === activeScope ? 'active' : ''}" data-lang="${tab.lang}">
-        ${tab.label}<span class="count">${tab.dictIds.length || ''}</span>
+      <button class="lang-chip ${tab.lang === activeScope ? 'active' : ''}" data-lang="${escapeHtml(tab.lang)}">
+        ${escapeHtml(tab.label)}<span class="count">${tab.dictIds.length || ''}</span>
       </button>`,
     )
     .join('')

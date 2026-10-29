@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "runId": "diff-fast-20261029210143",
+    "sessionStartedAt": 1793278903.1832128
+  },
+  "findings": [
+    {
+      "findingId": "DF20261029210143-000",
+      "filePath": "src/ui-main.ts",
+      "lineNumber": 268,
+      "riskType": "跨站脚本攻击",
+      "severity": "medium",
+      "riskCode": "langsRow.innerHTML = chips",
+      "confidence": 62,
+      "description": "主窗口渲染语言标签时，把 chips 直接拼进 innerHTML：`data-lang=\"${tab.lang}\">${tab.label}`（第 268-275 行）。chips 的来源是 loadTabs() 里 `api.dictionaries('usable')` 返回的词典列表，其 lang_from 字段是服务端原样下发的字符串（Rust `DictInfo.lang_from: String`，无白名单/枚举校验），经 langGroupOf() 时未知语言码被**原样返回**，再由 langGroupLabel() 的 `LANG_GROUP_LABELS[group] ?? group` 兜底回退成同一原始字符串，最终未做任何 HTML 转义就进入 innerHTML 的属性和文本位置。因此当被配置的 MyDict 服务器（开发者工具里 server_url 常是局域网明文 http）被攻陷或在链路上被中间人改写，只要返回一条 lang_from 形如 `\"><img src=x onerror=…>` 的词典记录，脚本就会在主窗口 WebView 中执行。该 WebView 拥有全部 29 个 Tauri 命令（tauri.conf.json 的 app.security.csp 为 null，无 CSP 兜底），执行后可直接调用 invoke 读取剪贴板（clipboard_text）、改写设置中的 server_url（save_settings）、用 open_external 打开任意 http(s) 链接、读取 auth_status 的用户名/服务器地址，构成从「服务端数据不可信」到「桌面端本地能力被滥用」的升级链。注：该行本身不是本次 diff 改动行（本次只在其上方的 chips 列表里加入了「生词本」伪标签），属存量问题；因 sink 落在本次变更文件内，按 Fast diff 的文件级口径纳入本次结果。",
+      "recommendation": "1) 不要把服务端字符串拼进 innerHTML：把 langsRow.innerHTML 模板改成 DOM 构建（document.createElement('button') + el.textContent = tab.label，data-lang 用 el.dataset.lang 赋值），或对 tab.lang/tab.label 统一走已有的 escapeHtml() 再插入；2) 更根本的做法是在 Rust 侧给 lang_from 加白名单/正则校验（如 `^[a-z]{2,3}(-[A-Za-z]{2,8})?$`，不匹配就归到 other），前端 langGroupOf() 也只接受 `[A-Za-z-]` 字符集；3) 建议顺带把 tauri.conf.json 的 app.security.csp 从 null 改为最小策略（default-src 'self'; script-src 'self'; img-src 'self' data: http: https:），让任何漏网的 HTML 注入无法执行内联脚本。",
+      "severityRationale": "按 XSS 默认定级 medium；触发需先控制/中间人改写用户配置的 MyDict 服务器响应（自建服务场景下概率不高），但一旦命中即在拥有全部 IPC 命令且无 CSP 的主窗口中执行，收益高，故不降级为 low。",
+      "attackChain": {
+        "source": "GET /api/dict（经 Rust commands `dictionaries` 转发）响应中的 lang_from 字段，服务端完全可控、客户端无白名单",
+        "propagation": [
+          "src-tauri/src/mydict.rs: dictionaries() 反序列化为 Vec<PublicDict>，lang_from 为 String 无校验",
+          "src/ui-main.ts loadTabs(): lang = langGroupOf(d.lang_from) —— 非 zh 系语言码原样返回",
+          "src/langs.ts langGroupLabel(): LANG_GROUP_LABELS[group] ?? group —— 未知分组回退为原始字符串",
+          "src/ui-main.ts renderTabs(): chips.push({ lang, label })",
+          "src/ui-main.ts:268 langsRow.innerHTML = chips.map(tab => `...${tab.label}...data-lang=\"${tab.lang}\"`)"
+        ],
+        "sink": "src/ui-main.ts:268 langsRow.innerHTML（HTML 字符串拼接）",
+        "traceMethod": "Grep+Read"
+      },
+      "cwe": "CWE-79",
+      "verificationStatus": "inline-verified",
+      "sourceAgent": "light-inline",
+      "traceMethod": "Grep+Read",
+      "auditedBy": [
+        "light-inline"
+      ],
+      "fixedCode": ""
+    }
+  ],
+  "stats": {
+    "input": 1,
+    "output": 1,
+    "removed_by_ah": 0,
+    "downgraded_by_ah": 0,
+    "removed_by_diff_remediation": 0,
+    "fast_plus_applied": {
+      "chain": 0,
+      "challenge": 0,
+      "total": 0
+    }
+  }
+}
